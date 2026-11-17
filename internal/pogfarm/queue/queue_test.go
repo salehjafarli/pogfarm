@@ -760,8 +760,8 @@ func TestFailByFormerHolder(t *testing.T) {
 }
 
 func TestFailAfterLeaseRanOut(t *testing.T) {
-	// Nothing in this package takes an expired lease back. Until something
-	// does, the job was given to nobody else and its holder's report counts.
+	// Until the reaper takes an expired lease back, the job was given to
+	// nobody else and its holder's report counts.
 	f := newFixture(t, Options{})
 	f.enqueue()
 	_, id := f.claim("node-a")

@@ -39,6 +39,18 @@ pogfarm:
     # Env: POGFARM_QUEUE_LEASE_DURATION. Default "2m".
     lease_duration: "2m"
 
+    # How many times a job is handed out before it is given up. A job whose
+    # render failed, or whose lease expired, is queued again until it has
+    # had this many attempts, and is then marked failed. At least 1.
+    # Env: POGFARM_QUEUE_MAX_ATTEMPTS. Default 3.
+    max_attempts: 3
+
+    # How often pogfarm looks for jobs whose lease has expired, because
+    # their clipper stopped sending heartbeats, and takes them back. A
+    # duration such as "15s", at least "1s".
+    # Env: POGFARM_QUEUE_REAPER_INTERVAL. Default "15s".
+    reaper_interval: "15s"
+
   # Twitch API credentials, from an application registered in the Twitch
   # developer console. pogfarm uses them to obtain an app access token.
   # Set both keys or neither.
