@@ -100,6 +100,14 @@ pogfarm:
   #   # Env: POGFARM_TELEGRAM_OWNER_CHAT_ID.
   #   owner_chat_id: 123456789
 
+  # Approve and Reject buttons of the review messages.
+  review:
+    # How long after a decision the Undo button works, as long as no upload
+    # of the clip has started. At most "1h", the shortest rejected_retention,
+    # so a rejected clip's file is never deleted while it can still be undone.
+    # Env: POGFARM_REVIEW_UNDO_WINDOW. Default "5m".
+    undo_window: "5m"
+
   # TwitchDownloaderCLI program used to download the chat of a Twitch VOD:
   # a path, or a name looked up in PATH.
   # Env: POGFARM_TWITCH_DOWNLOADER_PATH. Default "TwitchDownloaderCLI".
@@ -186,6 +194,45 @@ pogfarm:
       max_per_vod: 5
       # Score of a viewer clip with no views; more views score more.
       viewer_clip_score: 3
+
+  # Uploader: posts approved clips to the upload targets, one row per clip and
+  # target. A clip is never posted twice: if pogfarm stops during an upload,
+  # the target is asked whether the post exists where it can be, and
+  # otherwise the owner is told to look by hand.
+  upload:
+    # The targets clips are posted to. File only. With no enabled target
+    # nothing is posted. Default: none.
+    # targets:
+    #     # Target name, as stored in the database. Unique.
+    #   - name: youtube
+    #     # Optional, default true. false keeps the entry but posts nothing
+    #     # more to it; approvals create no rows for it.
+    #     enabled: true
+    #     # Most posts in any 24 hours (a rolling window). At least 1.
+    #     daily_cap: 5
+    #     # Least time between two posts. "0s" for none.
+    #     min_spacing: "2h"
+
+    # How many uploads of one clip to one target are started before it is
+    # given up. A permanent error gives up at once.
+    # Env: POGFARM_UPLOAD_MAX_ATTEMPTS. Default 5.
+    max_attempts: 5
+
+    # Wait before the first retry of a failed upload. It doubles with every
+    # further failure, up to max_retry_backoff.
+    # Env: POGFARM_UPLOAD_RETRY_BACKOFF. Default "5m".
+    retry_backoff: "5m"
+    # Env: POGFARM_UPLOAD_MAX_RETRY_BACKOFF. Default "6h".
+    max_retry_backoff: "6h"
+
+    # How long the uploader waits between two looks at the pending uploads.
+    # Env: POGFARM_UPLOAD_POLL_INTERVAL. Default "1m".
+    poll_interval: "1m"
+
+    # Longest one upload may take. One that runs out is treated like a crash
+    # during the upload: it is not retried blindly.
+    # Env: POGFARM_UPLOAD_ATTEMPT_TIMEOUT. Default "30m".
+    attempt_timeout: "30m"
 
   # Title, description and tags of posted clips. File only. Patterns use
   # placeholders in braces: {streamer} (display name), {login}, {channel_url},
