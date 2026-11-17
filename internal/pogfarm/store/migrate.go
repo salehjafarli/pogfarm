@@ -105,7 +105,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 			}
 			_, err := tx.ExecContext(ctx,
 				`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`,
-				m.version, m.name, time.Now().UTC().Format(time.RFC3339))
+				m.version, m.name, FormatTime(time.Now()))
 			return err
 		})
 		if err != nil {
