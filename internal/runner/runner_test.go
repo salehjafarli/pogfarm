@@ -62,7 +62,7 @@ func runHelper(mode string) int {
 		fmt.Println(cmd.Process.Pid)
 		return 0
 	case "sleep":
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Minute)
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown helper mode", mode)
@@ -493,14 +493,17 @@ func TestRunDoesNotHangOnEscapedDescendant(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The grandchild left the process group, so Run cannot kill it. Do it
-	// here; it would exit by itself after 20s anyway.
+	// here; it would exit by itself after five minutes anyway.
 	pid := parsePid(t, res.Stdout)
 	defer syscall.Kill(pid, syscall.SIGKILL)
 
 	if !alive(pid) {
 		t.Fatal("the grandchild is gone; the test did not exercise an open pipe")
 	}
-	if elapsed > 10*time.Second {
+	// The grandchild holds the pipe for five minutes. The bound is far
+	// below that and far above the grace period, so that slow process
+	// startup on a loaded machine is not mistaken for waiting on the pipe.
+	if elapsed > time.Minute {
 		t.Errorf("returned after %v; Run waited for the pipe held by the grandchild", elapsed)
 	}
 }
