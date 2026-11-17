@@ -48,6 +48,11 @@ func testConfig(t *testing.T) *config.Pogfarm {
 			MaxAttempts:    3,
 			ReaperInterval: 15 * time.Second,
 		},
+		Cleanup: config.Cleanup{
+			Interval:          30 * time.Minute,
+			RejectedRetention: 24 * time.Hour,
+			PostedRetention:   7 * 24 * time.Hour,
+		},
 	}
 }
 
