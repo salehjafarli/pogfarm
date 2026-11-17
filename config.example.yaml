@@ -1,0 +1,52 @@
+# pogfarm example configuration.
+#
+# Copy this file to config.yaml and adjust it. config.yaml is git-ignored and
+# must never be committed.
+#
+# Where the file is found: the -config flag, or the POGFARM_CONFIG environment
+# variable. With neither, no file is read and everything comes from the
+# defaults and the environment.
+#
+# Every key can be overridden by the environment variable named next to it.
+# The environment wins over this file. An unknown key is an error.
+#
+# Secrets are shown here as the placeholder "change-me", which is rejected at
+# startup so it cannot be used by accident. Replace it in your own config.yaml,
+# or better, supply each secret through its environment variable or through
+# <VARIABLE>_FILE naming a file that holds the value, which is how container
+# secrets are mounted. Setting both the variable and its _FILE is an error.
+
+# Main service. Runs once, on the main node.
+pogfarm:
+  # Address the job API listens on, as host:port.
+  # Env: POGFARM_LISTEN_ADDR. Default ":8080".
+  listen_addr: ":8080"
+
+  # Directory for the SQLite file and the finished clips.
+  # Env: POGFARM_DATA_DIR. Default "data".
+  data_dir: "data"
+
+  # Shared secret that clippers present to the job API. Required, at least
+  # 16 characters, and the same value on every clipper.
+  # Env: POGFARM_API_SECRET or POGFARM_API_SECRET_FILE.
+  api_secret: "change-me"
+
+# Render service. Runs on every node.
+clipper:
+  # Base URL of the pogfarm job API. Required.
+  # Env: CLIPPER_POGFARM_URL.
+  pogfarm_url: "http://localhost:8080"
+
+  # Working directory for a job's files. Emptied after each job.
+  # Env: CLIPPER_SCRATCH_DIR. Default "scratch".
+  scratch_dir: "scratch"
+
+  # Name shown for this clipper in pogfarm's queue and status output.
+  # 1 to 63 letters, digits, dots, dashes or underscores.
+  # Env: CLIPPER_NAME. Default: the machine's hostname.
+  # name: "laptop-1"
+
+  # Shared secret presented to pogfarm. Required, and it must match
+  # pogfarm.api_secret.
+  # Env: CLIPPER_API_SECRET or CLIPPER_API_SECRET_FILE.
+  api_secret: "change-me"
