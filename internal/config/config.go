@@ -34,6 +34,11 @@ type Pogfarm struct {
 	DataDir string `yaml:"data_dir" env:"POGFARM_DATA_DIR"`
 	// APISecret is the shared secret clippers present to the job API.
 	APISecret Secret `yaml:"api_secret" env:"POGFARM_API_SECRET"`
+
+	// TwitchDownloaderPath is the TwitchDownloaderCLI program used to
+	// download the chat of a Twitch VOD: a path, or a name looked up in
+	// PATH.
+	TwitchDownloaderPath string `yaml:"twitch_downloader_path" env:"POGFARM_TWITCH_DOWNLOADER_PATH"`
 }
 
 // Clipper is the configuration of the render service.
@@ -62,6 +67,8 @@ func defaults() file {
 		Pogfarm: Pogfarm{
 			ListenAddr: ":8080",
 			DataDir:    "data",
+
+			TwitchDownloaderPath: "TwitchDownloaderCLI",
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -140,6 +147,10 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, "pogfarm.data_dir (POGFARM_DATA_DIR) must not be empty")
 	}
 	problems = append(problems, checkSecret("pogfarm.api_secret", "POGFARM_API_SECRET", c.APISecret)...)
+
+	if c.TwitchDownloaderPath == "" {
+		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")
+	}
 	return problems
 }
 

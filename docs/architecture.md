@@ -49,3 +49,26 @@ make fmt-check
 ```
 
 The version printed by each binary is injected at build time with `-ldflags "-X main.version=..."`.
+
+## External tools
+
+### TwitchDownloaderCLI
+
+Pinned version: **1.56.5** (<https://github.com/lay295/TwitchDownloader/releases/tag/1.56.5>). Images and development machines should install this release; check the points below again before moving to a newer one.
+
+pogfarm uses it to fetch the chat of a Twitch VOD (`internal/pogfarm/source/twitch`, `ChatFetcher`). The program is found through `pogfarm.twitch_downloader_path`. One fetch runs:
+
+```
+TwitchDownloaderCLI chatdownload --id <vod id> --output <data_dir>/chat-<vod id>-<random>/chat.json --collision Overwrite --banner=false
+```
+
+- The `.json` extension of `--output` selects the JSON format.
+- Images are embedded only with `-E / --embed-images`, which is not passed.
+- `--collision Overwrite` keeps the tool from prompting if the output file exists.
+- The work directory is removed when the fetch returns, whatever the outcome. A pogfarm that is killed mid-fetch can leave a `chat-*` directory in the data directory; it is safe to delete.
+
+From the JSON only the `comments` array is read, and of each comment `content_offset_seconds`, `commenter.display_name` (falling back to `commenter.name`), `message.body` and `message.fragments`. A fragment whose `emoticon` is not null is an emote and its `text` is the emote's name. Without embedded images only Twitch's own emotes are marked this way; BTTV, FFZ and 7TV emotes appear in the message text but not in the emote list.
+
+The tool reports a deleted or expired VOD only through the message "Invalid VOD, deleted/expired VOD possibly?"; the fetch turns that into `source.ErrVODNotFound`.
+
+The flags and the JSON layout were checked against the README and source of release 1.56.5. The fetch has not yet been run against the real program: its tests use a stand-in executable and a hand-written file in the same layout.

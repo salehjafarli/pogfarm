@@ -31,6 +31,11 @@ pogfarm:
   # Env: POGFARM_API_SECRET or POGFARM_API_SECRET_FILE.
   api_secret: "change-me"
 
+  # TwitchDownloaderCLI program used to download the chat of a Twitch VOD:
+  # a path, or a name looked up in PATH.
+  # Env: POGFARM_TWITCH_DOWNLOADER_PATH. Default "TwitchDownloaderCLI".
+  twitch_downloader_path: "TwitchDownloaderCLI"
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.
