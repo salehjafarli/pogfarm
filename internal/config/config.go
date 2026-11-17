@@ -20,6 +20,10 @@ const EnvConfigPath = "POGFARM_CONFIG"
 // sends several heartbeats per lease, so a shorter one could not be kept.
 const MinLeaseDuration = 10 * time.Second
 
+// DefaultMaxClipBytes is the default largest clip upload: 256 MiB, far above
+// what a vertical clip of a minute or two needs.
+const DefaultMaxClipBytes = 256 << 20
+
 // MinSecretLength is the shortest shared API secret that is accepted.
 const MinSecretLength = 16
 
@@ -39,6 +43,9 @@ type Pogfarm struct {
 	DataDir string `yaml:"data_dir" env:"POGFARM_DATA_DIR"`
 	// APISecret is the shared secret clippers present to the job API.
 	APISecret Secret `yaml:"api_secret" env:"POGFARM_API_SECRET"`
+	// MaxClipBytes is the largest clip file a clipper may upload, in bytes.
+	// A larger upload is rejected with payload_too_large.
+	MaxClipBytes int64 `yaml:"max_clip_bytes" env:"POGFARM_MAX_CLIP_BYTES"`
 
 	// Queue configures the job queue.
 	Queue Queue `yaml:"queue"`
@@ -109,9 +116,10 @@ type file struct {
 func defaults() file {
 	return file{
 		Pogfarm: Pogfarm{
-			ListenAddr: ":8080",
-			DataDir:    "data",
-			Queue:      Queue{LeaseDuration: 2 * time.Minute},
+			ListenAddr:   ":8080",
+			DataDir:      "data",
+			MaxClipBytes: DefaultMaxClipBytes,
+			Queue:        Queue{LeaseDuration: 2 * time.Minute},
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 		},
@@ -192,6 +200,10 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, "pogfarm.data_dir (POGFARM_DATA_DIR) must not be empty")
 	}
 	problems = append(problems, checkSecret("pogfarm.api_secret", "POGFARM_API_SECRET", c.APISecret)...)
+	if c.MaxClipBytes <= 0 {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.max_clip_bytes (POGFARM_MAX_CLIP_BYTES) must be a positive number of bytes: got %d", c.MaxClipBytes))
+	}
 	if c.Queue.LeaseDuration < MinLeaseDuration {
 		problems = append(problems, fmt.Sprintf(
 			"pogfarm.queue.lease_duration (POGFARM_QUEUE_LEASE_DURATION) must be at least %s: got %s",
