@@ -190,8 +190,9 @@ func TestCoreTablesMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
-		if got, want := strings.Join(appliedList(t, s.Reader()), ","), "1:core_tables"; got != want {
-			t.Errorf("open %d: applied migrations = %q, want %q", i, got, want)
+		// Later migrations follow; the first is the core tables.
+		if got, want := appliedList(t, s.Reader()), "1:core_tables"; len(got) == 0 || got[0] != want {
+			t.Errorf("open %d: applied migrations = %q, want %q first", i, got, want)
 		}
 		for _, table := range coreTables {
 			var strict int
