@@ -23,7 +23,30 @@ var (
 	_ source.Source           = (*sourcetest.Fake)(nil)
 	_ source.Source           = (*sourcetest.FakeWithClips)(nil)
 	_ source.ViewerClipLister = (*sourcetest.FakeWithClips)(nil)
+	_ source.StreamerLookup   = (*sourcetest.Fake)(nil)
 )
+
+// plainSource has only the methods of source.Source, whatever the source it
+// wraps can do besides.
+type plainSource struct{ source.Source }
+
+func TestLookupStreamerOptionalCapability(t *testing.T) {
+	ctx := context.Background()
+	acct := source.Account{ID: "42", Streamer: api.Streamer{Login: "streamer", DisplayName: "Streamer"}}
+	f := sourcetest.New("alpha")
+	f.AddAccount(acct)
+
+	if _, err := source.LookupStreamer(ctx, plainSource{f}, "streamer"); !errors.Is(err, source.ErrLookupUnsupported) {
+		t.Errorf("source without the capability: err = %v, want ErrLookupUnsupported", err)
+	}
+	got, err := source.LookupStreamer(ctx, f, "streamer")
+	if err != nil || got != acct {
+		t.Errorf("source with the capability: got %+v, %v; want %+v", got, err, acct)
+	}
+	if _, err := source.LookupStreamer(ctx, f, "nobody"); !errors.Is(err, source.ErrStreamerNotFound) {
+		t.Errorf("unknown login: err = %v, want ErrStreamerNotFound", err)
+	}
+}
 
 func TestRegistryGet(t *testing.T) {
 	a := sourcetest.New("alpha")

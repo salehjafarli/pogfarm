@@ -26,17 +26,18 @@ type Fake struct {
 	vods  map[string][]source.VOD // by streamer login, as added
 	chats map[string][]source.ChatMessage
 	clips map[string][]source.ViewerClip
+	accts map[string]source.Account // by login
 	err   error
 	calls []Call
 }
 
 // Call records one call made to a fake.
 type Call struct {
-	// Method is the name of the method called: "RecentVODs", "Chat" or
-	// "ViewerClips".
+	// Method is the name of the method called: "RecentVODs", "Chat",
+	// "ViewerClips" or "LookupStreamer".
 	Method string
-	// Arg is the streamer login for RecentVODs and the VOD ID for the
-	// others.
+	// Arg is the streamer login for RecentVODs and LookupStreamer and the
+	// VOD ID for the others.
 	Arg string
 }
 
@@ -47,7 +48,16 @@ func New(platform api.Platform) *Fake {
 		vods:     make(map[string][]source.VOD),
 		chats:    make(map[string][]source.ChatMessage),
 		clips:    make(map[string][]source.ViewerClip),
+		accts:    make(map[string]source.Account),
 	}
+}
+
+// AddAccount adds or replaces an account, keyed by its login, for
+// LookupStreamer. An account does not need any VODs.
+func (f *Fake) AddAccount(acct source.Account) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.accts[acct.Streamer.Login] = acct
 }
 
 // AddVOD adds or replaces a VOD, keyed by its ID, under its streamer's login.
@@ -151,6 +161,34 @@ func (f *Fake) Chat(ctx context.Context, vod source.VOD) ([]source.ChatMessage, 
 		return nil, fmt.Errorf("%w: %s", source.ErrVODNotFound, vod.ID)
 	}
 	return cloneChat(f.chats[vod.ID]), nil
+}
+
+// LookupStreamer implements source.StreamerLookup. It returns the account
+// added with AddAccount for the login or, when there is none, the account of
+// the newest VOD added under the login that carries a StreamerID. It fails
+// with source.ErrStreamerNotFound when it knows neither.
+func (f *Fake) LookupStreamer(ctx context.Context, login string) (source.Account, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.beginLocked(ctx, "LookupStreamer", login); err != nil {
+		return source.Account{}, err
+	}
+	if acct, ok := f.accts[login]; ok {
+		return acct, nil
+	}
+	var (
+		found  bool
+		newest source.VOD
+	)
+	for _, v := range f.vods[login] {
+		if v.StreamerID != "" && (!found || v.StartedAt.After(newest.StartedAt)) {
+			found, newest = true, v
+		}
+	}
+	if !found {
+		return source.Account{}, fmt.Errorf("%w: %s", source.ErrStreamerNotFound, login)
+	}
+	return source.Account{ID: newest.StreamerID, Streamer: newest.Streamer}, nil
 }
 
 func (f *Fake) viewerClips(ctx context.Context, vod source.VOD) ([]source.ViewerClip, error) {

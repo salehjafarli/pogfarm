@@ -32,6 +32,9 @@ var allEnv = []string{
 	"POGFARM_DISCOVERY_MAX_VOD_AGE",
 	"POGFARM_TWITCH_DOWNLOADER_PATH",
 	"POGFARM_MAX_CLIP_BYTES",
+	// Scanner and discovery loops (scan_test.go).
+	"POGFARM_DISCOVERY_INTERVAL", "POGFARM_SCAN_INTERVAL", "POGFARM_SCAN_WORKERS",
+	"POGFARM_SCAN_MAX_ATTEMPTS", "POGFARM_SCAN_RETRY_BACKOFF", "POGFARM_SCAN_MAX_RETRY_BACKOFF",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader

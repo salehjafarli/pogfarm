@@ -105,6 +105,69 @@ pogfarm:
     # Env: POGFARM_DISCOVERY_MAX_VOD_AGE. Default "72h".
     max_vod_age: "72h"
 
+    # Time between two looks at the allowlisted streamers' VODs. The first
+    # look is right at startup, after the allowlist is synced into the
+    # database.
+    # Env: POGFARM_DISCOVERY_INTERVAL. Default "15m".
+    interval: "15m"
+
+  # Scanner: downloads the chat of each recorded VOD, finds the moments worth
+  # clipping and queues their render jobs. Runs only when the Twitch
+  # credentials are set.
+  scan:
+    # How long the scanner waits, when no VOD is due, before it looks again.
+    # Env: POGFARM_SCAN_INTERVAL. Default "1m".
+    interval: "1m"
+
+    # How many VODs are scanned at the same time.
+    # Env: POGFARM_SCAN_WORKERS. Default 1.
+    workers: 1
+
+    # How many scans of one VOD are started before it is given up. A VOD the
+    # platform no longer has is given up at once.
+    # Env: POGFARM_SCAN_MAX_ATTEMPTS. Default 5.
+    max_attempts: 5
+
+    # Wait before the first retry of a failed scan. It doubles with every
+    # further failure, up to max_retry_backoff.
+    # Env: POGFARM_SCAN_RETRY_BACKOFF. Default "10m".
+    retry_backoff: "10m"
+    # Env: POGFARM_SCAN_MAX_RETRY_BACKOFF. Default "6h".
+    max_retry_backoff: "6h"
+
+    # Chat spike detection. File only. The chat is cut into windows; a
+    # window is flagged when it holds at least min_messages messages and
+    # factor times the average of the windows within baseline around it.
+    spike:
+      window: "5s"
+      baseline: "5m"
+      factor: 3
+      min_messages: 8
+      # Flagged windows at most this far apart become one spike.
+      merge_gap: "0s"
+      # Ignore the start of each VOD, where chat greets the streamer.
+      skip_start: "0s"
+      # Messages with these emotes or words count this many times; 0 hides
+      # them, which suits bot commands. Default: none.
+      # weights:
+      #   LUL: 2
+      #   KEKW: 2
+      #   "!song": 0
+
+    # How spikes and viewer clips become clip windows. File only.
+    candidates:
+      # A spike's window runs from pre_roll before it to post_roll after
+      # its peak; a viewer clip's is the clip with clip_padding each side.
+      pre_roll: "25s"
+      post_roll: "5s"
+      clip_padding: "2s"
+      min_length: "15s"
+      max_length: "60s"
+      # Only the best this many candidates of a VOD are rendered.
+      max_per_vod: 5
+      # Score of a viewer clip with no views; more views score more.
+      viewer_clip_score: 3
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.

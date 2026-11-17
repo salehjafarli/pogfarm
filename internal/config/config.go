@@ -70,6 +70,9 @@ type Pogfarm struct {
 	Streamers []Streamer `yaml:"streamers"`
 	// Discovery configures how VODs of the allowlisted streamers are found.
 	Discovery Discovery `yaml:"discovery"`
+
+	// Scan configures the scanner loop. See scan.go.
+	Scan Scan `yaml:"scan"`
 }
 
 // Streamer is one entry of the allowlist.
@@ -96,6 +99,8 @@ type Discovery struct {
 	// VODs are skipped, because the platform deletes VODs after a retention
 	// period.
 	MaxVODAge time.Duration `yaml:"max_vod_age" env:"POGFARM_DISCOVERY_MAX_VOD_AGE"`
+	// Interval is the time between two discovery passes.
+	Interval time.Duration `yaml:"interval" env:"POGFARM_DISCOVERY_INTERVAL"`
 }
 
 // Queue is the "queue" section of the main service's configuration.
@@ -171,7 +176,9 @@ func defaults() file {
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 
-			Discovery: Discovery{MaxVODAge: 72 * time.Hour},
+			Discovery: Discovery{MaxVODAge: 72 * time.Hour, Interval: 15 * time.Minute},
+
+			Scan: defaultScan(),
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -281,6 +288,12 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, fmt.Sprintf(
 			"pogfarm.discovery.max_vod_age (POGFARM_DISCOVERY_MAX_VOD_AGE) must be a positive duration such as \"72h\": got %s", c.Discovery.MaxVODAge))
 	}
+
+	if c.Discovery.Interval <= 0 {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.discovery.interval (POGFARM_DISCOVERY_INTERVAL) must be a positive duration such as \"15m\": got %s", c.Discovery.Interval))
+	}
+	problems = append(problems, c.Scan.validate()...)
 	return problems
 }
 
