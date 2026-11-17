@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "51000000003",
+      "user_id": "141981764",
+      "user_login": "some_streamer",
+      "user_name": "Some_Streamer",
+      "game_id": "509658",
+      "game_name": "Just Chatting",
+      "type": "live",
+      "title": "Ranked until I drop",
+      "viewer_count": 2123,
+      "started_at": "2026-11-16T18:00:00Z",
+      "language": "en",
+      "thumbnail_url": "https://static-cdn.example/live-{width}x{height}.jpg",
+      "tag_ids": [],
+      "tags": ["English"],
+      "is_mature": false
+    }
+  ],
+  "pagination": {}
+}

@@ -28,7 +28,8 @@ var allEnv = []string{
 	"POGFARM_TELEGRAM_BOT_TOKEN", "POGFARM_TELEGRAM_BOT_TOKEN_FILE", "POGFARM_TELEGRAM_OWNER_CHAT_ID",
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
 	"POGFARM_TWITCH_CLIENT_ID", "POGFARM_TWITCH_CLIENT_SECRET", "POGFARM_TWITCH_CLIENT_SECRET_FILE",
-	"POGFARM_QUEUE_LEASE_DURATION",
+	"POGFARM_QUEUE_LEASE_DURATION", "POGFARM_QUEUE_MAX_ATTEMPTS", "POGFARM_QUEUE_REAPER_INTERVAL",
+	"POGFARM_DISCOVERY_MAX_VOD_AGE",
 	"POGFARM_TWITCH_DOWNLOADER_PATH",
 	"POGFARM_MAX_CLIP_BYTES",
 }
@@ -862,5 +863,193 @@ pogfarm:
 	got := problemsOf(t, err)
 	if len(got) != 1 || !strings.Contains(got[0], "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty") {
 		t.Errorf("empty path: got problems %q", got)
+	}
+}
+
+// ---- streamer allowlist and discovery ----
+
+func TestAllowlistIsEmptyByDefault(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Streamers) != 0 {
+		t.Errorf("allowlist should be empty by default: %+v", cfg.Streamers)
+	}
+	if cfg.Discovery.MaxVODAge != 72*time.Hour {
+		t.Errorf("max_vod_age default: got %s, want 72h", cfg.Discovery.MaxVODAge)
+	}
+}
+
+func TestAllowlistFromFile(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  api_secret: `+goodSecret+`
+  streamers:
+    - platform: twitch
+      login: Some_Streamer
+    - platform: twitch
+      login: other
+      enabled: false
+    - platform: twitch
+      login: third
+      enabled: true
+  discovery:
+    max_vod_age: 36h
+`)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type entry struct {
+		platform, login string
+		on              bool
+	}
+	want := []entry{{"twitch", "some_streamer", true}, {"twitch", "other", false}, {"twitch", "third", true}}
+	if len(cfg.Streamers) != len(want) {
+		t.Fatalf("got %d entries, want %d: %+v", len(cfg.Streamers), len(want), cfg.Streamers)
+	}
+	for i, w := range want {
+		s := cfg.Streamers[i]
+		if s.Enabled == nil {
+			t.Fatalf("entry %d: Enabled is nil after loading", i)
+		}
+		if got := (entry{string(s.Platform), s.Login, s.On()}); got != w || *s.Enabled != w.on {
+			t.Errorf("entry %d: got %+v, want %+v", i, got, w)
+		}
+	}
+	if cfg.Discovery.MaxVODAge != 36*time.Hour {
+		t.Errorf("max_vod_age: got %s, want 36h", cfg.Discovery.MaxVODAge)
+	}
+	if out := cfg.String(); !strings.Contains(out, "login: some_streamer") || !strings.Contains(out, "enabled: false") {
+		t.Errorf("String() lacks the allowlist:\n%s", out)
+	}
+}
+
+func TestAllowlistExampleEntryLoads(t *testing.T) {
+	// The entry config.example.yaml shows commented out, uncommented.
+	cleanEnv(t)
+	example, err := os.ReadFile(filepath.Join("..", "..", "config.example.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	uncommented := 0
+	in := false
+	for _, line := range strings.Split(string(example), "\n") {
+		switch {
+		case strings.HasPrefix(line, "  # streamers:"):
+			in = true
+		case in && !strings.HasPrefix(line, "  #"):
+			in = false
+		}
+		if in {
+			line = strings.Replace(line, "  # ", "  ", 1)
+			uncommented++
+		}
+		lines = append(lines, line)
+	}
+	if uncommented == 0 {
+		t.Fatal("config.example.yaml has no commented-out streamers block")
+	}
+	path := writeFile(t, "config.yaml", strings.Join(lines, "\n"))
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("POGFARM_TWITCH_CLIENT_ID", twitchID)
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", twitchSecret)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Streamers) != 1 || cfg.Streamers[0].Platform != "twitch" ||
+		cfg.Streamers[0].Login != "some_streamer" || !cfg.Streamers[0].On() {
+		t.Errorf("unexpected allowlist: %+v", cfg.Streamers)
+	}
+}
+
+func TestAllowlistValidation(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  api_secret: `+goodSecret+`
+  streamers:
+    - login: nobody
+    - platform: kick
+      login: someone
+    - platform: twitch
+    - platform: twitch
+      login: "https://twitch.tv/someone"
+    - platform: twitch
+      login: "two words"
+    - platform: twitch
+      login: twice
+    - platform: twitch
+      login: TWICE
+      enabled: false
+`)
+
+	_, err := LoadPogfarm(path)
+	got := problemsOf(t, err)
+	want := []string{
+		"pogfarm.streamers[0].platform is required",
+		`pogfarm.streamers[1].platform is not a platform pogfarm knows: got "kick"`,
+		"pogfarm.streamers[2].login is required",
+		"pogfarm.streamers[3].login must be the account name alone",
+		"pogfarm.streamers[4].login must be the account name alone",
+		"pogfarm.streamers[6] repeats the streamer twitch/twice",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("want %d problems, got %d:\n%s", len(want), len(got), strings.Join(got, "\n"))
+	}
+	for i, w := range want {
+		if !strings.Contains(got[i], w) {
+			t.Errorf("problem %d: got %q, want it to contain %q", i, got[i], w)
+		}
+	}
+}
+
+func TestAllowlistUnknownKeyIsAnError(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  api_secret: `+goodSecret+`
+  streamers:
+    - platform: twitch
+      login: someone
+      enabeld: false
+`)
+	if _, err := LoadPogfarm(path); err == nil || !strings.Contains(err.Error(), "enabeld") {
+		t.Errorf("a misspelt key in an allowlist entry should be an error, got %v", err)
+	}
+}
+
+func TestMaxVODAgeFromEnvAndValidation(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	t.Setenv("POGFARM_DISCOVERY_MAX_VOD_AGE", "12h")
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Discovery.MaxVODAge != 12*time.Hour {
+		t.Errorf("max_vod_age: got %s, want 12h", cfg.Discovery.MaxVODAge)
+	}
+
+	t.Setenv("POGFARM_DISCOVERY_MAX_VOD_AGE", "-1h")
+	_, err = LoadPogfarm("")
+	if got := problemsOf(t, err); len(got) != 1 || !strings.Contains(got[0], "pogfarm.discovery.max_vod_age") {
+		t.Errorf("unexpected problems: %v", got)
+	}
+
+	t.Setenv("POGFARM_DISCOVERY_MAX_VOD_AGE", "soon")
+	_, err = LoadPogfarm("")
+	if got := strings.Join(problemsOf(t, err), "\n"); !strings.Contains(got, "POGFARM_DISCOVERY_MAX_VOD_AGE: not a duration") {
+		t.Errorf("unexpected problems: %s", got)
 	}
 }

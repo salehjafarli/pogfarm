@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/salehjafarli/pogfarm/internal/api"
 )
 
 // EnvConfigPath names the environment variable that holds the config file
@@ -23,6 +25,10 @@ const MinLeaseDuration = 10 * time.Second
 // DefaultMaxClipBytes is the default largest clip upload: 256 MiB, far above
 // what a vertical clip of a minute or two needs.
 const DefaultMaxClipBytes = 256 << 20
+
+// MinReaperInterval is the shortest interval between two passes of the lease
+// reaper that is accepted.
+const MinReaperInterval = time.Second
 
 // MinSecretLength is the shortest shared API secret that is accepted.
 const MinSecretLength = 16
@@ -58,6 +64,38 @@ type Pogfarm struct {
 	// download the chat of a Twitch VOD: a path, or a name looked up in
 	// PATH.
 	TwitchDownloaderPath string `yaml:"twitch_downloader_path" env:"POGFARM_TWITCH_DOWNLOADER_PATH"`
+
+	// Streamers is the allowlist: the only streamers pogfarm processes. It
+	// is set in the config file only.
+	Streamers []Streamer `yaml:"streamers"`
+	// Discovery configures how VODs of the allowlisted streamers are found.
+	Discovery Discovery `yaml:"discovery"`
+}
+
+// Streamer is one entry of the allowlist.
+type Streamer struct {
+	// Platform is the platform the streamer is on, for example "twitch".
+	Platform api.Platform `yaml:"platform"`
+	// Login is the streamer's account name on the platform, as used in
+	// URLs. It is lower-cased when the configuration is loaded.
+	Login string `yaml:"login"`
+	// Enabled switches the entry on or off. It is on when the key is left
+	// out; after loading it is never nil. Use On to read it.
+	Enabled *bool `yaml:"enabled"`
+}
+
+// On reports whether the entry is switched on. An entry without the enabled
+// key is on.
+func (s Streamer) On() bool {
+	return s.Enabled == nil || *s.Enabled
+}
+
+// Discovery is the "discovery" section of the main service's configuration.
+type Discovery struct {
+	// MaxVODAge is how long after its start a VOD is still recorded. Older
+	// VODs are skipped, because the platform deletes VODs after a retention
+	// period.
+	MaxVODAge time.Duration `yaml:"max_vod_age" env:"POGFARM_DISCOVERY_MAX_VOD_AGE"`
 }
 
 // Queue is the "queue" section of the main service's configuration.
@@ -65,6 +103,12 @@ type Queue struct {
 	// LeaseDuration is how long a claimed job stays with its clipper unless
 	// a heartbeat extends the lease.
 	LeaseDuration time.Duration `yaml:"lease_duration" env:"POGFARM_QUEUE_LEASE_DURATION"`
+	// MaxAttempts is how many times a job is handed out before a failure or
+	// an expired lease marks it failed instead of queueing it again.
+	MaxAttempts int `yaml:"max_attempts" env:"POGFARM_QUEUE_MAX_ATTEMPTS"`
+	// ReaperInterval is how often pogfarm looks for jobs whose lease has
+	// expired and takes them back.
+	ReaperInterval time.Duration `yaml:"reaper_interval" env:"POGFARM_QUEUE_REAPER_INTERVAL"`
 }
 
 // Twitch is the "twitch" section of the main service's configuration: the
@@ -119,9 +163,15 @@ func defaults() file {
 			ListenAddr:   ":8080",
 			DataDir:      "data",
 			MaxClipBytes: DefaultMaxClipBytes,
-			Queue:        Queue{LeaseDuration: 2 * time.Minute},
+			Queue: Queue{
+				LeaseDuration:  2 * time.Minute,
+				MaxAttempts:    3,
+				ReaperInterval: 15 * time.Second,
+			},
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
+
+			Discovery: Discovery{MaxVODAge: 72 * time.Hour},
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -209,11 +259,76 @@ func (c *Pogfarm) validate() []string {
 			"pogfarm.queue.lease_duration (POGFARM_QUEUE_LEASE_DURATION) must be at least %s: got %s",
 			MinLeaseDuration, c.Queue.LeaseDuration))
 	}
+	if c.Queue.MaxAttempts < 1 {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.queue.max_attempts (POGFARM_QUEUE_MAX_ATTEMPTS) must be at least 1: got %d",
+			c.Queue.MaxAttempts))
+	}
+	if c.Queue.ReaperInterval < MinReaperInterval {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.queue.reaper_interval (POGFARM_QUEUE_REAPER_INTERVAL) must be at least %s: got %s",
+			MinReaperInterval, c.Queue.ReaperInterval))
+	}
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
 
 	if c.TwitchDownloaderPath == "" {
 		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")
+	}
+
+	problems = append(problems, c.validateStreamers()...)
+	if c.Discovery.MaxVODAge <= 0 {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.discovery.max_vod_age (POGFARM_DISCOVERY_MAX_VOD_AGE) must be a positive duration such as \"72h\": got %s", c.Discovery.MaxVODAge))
+	}
+	return problems
+}
+
+// validateStreamers checks the allowlist and puts it in its loaded form:
+// logins lower-cased and every entry's Enabled set. An empty allowlist is
+// valid; pogfarm then processes nobody.
+func (c *Pogfarm) validateStreamers() []string {
+	var problems []string
+	type key struct {
+		platform api.Platform
+		login    string
+	}
+	seen := make(map[key]bool)
+	for i := range c.Streamers {
+		s := &c.Streamers[i]
+		name := fmt.Sprintf("pogfarm.streamers[%d]", i)
+		s.Login = strings.ToLower(s.Login)
+		on := s.On()
+		s.Enabled = &on
+
+		ok := true
+		switch {
+		case s.Platform == "":
+			problems = append(problems, fmt.Sprintf("%s.platform is required, for example %q", name, api.PlatformTwitch))
+			ok = false
+		case s.Platform != api.PlatformTwitch:
+			problems = append(problems, fmt.Sprintf(
+				"%s.platform is not a platform pogfarm knows: got %q, want %q", name, s.Platform, api.PlatformTwitch))
+			ok = false
+		}
+		switch {
+		case s.Login == "":
+			problems = append(problems, name+".login is required: the streamer's account name")
+			ok = false
+		case strings.ContainsFunc(s.Login, func(r rune) bool { return r <= ' ' || r == '/' || r == 0x7f }):
+			problems = append(problems, fmt.Sprintf(
+				"%s.login must be the account name alone, without spaces or a URL: got %q", name, s.Login))
+			ok = false
+		}
+		if !ok {
+			continue
+		}
+		k := key{s.Platform, s.Login}
+		if seen[k] {
+			problems = append(problems, fmt.Sprintf(
+				"%s repeats the streamer %s/%s: list each streamer once", name, s.Platform, s.Login))
+		}
+		seen[k] = true
 	}
 	return problems
 }
