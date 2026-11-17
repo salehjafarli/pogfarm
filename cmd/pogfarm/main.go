@@ -22,7 +22,9 @@ import (
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/server"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/source"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/source/twitch"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/status"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/store"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/upload"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -108,19 +110,58 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 	defer cancel()
 	var loops sync.WaitGroup
 
+	// The text clips are posted with: used by the uploader, and shown in the
+	// review message for the first enabled target.
+	compose := upload.NewComposer(st, cfg.Post)
+
+	// Telegram review: the bot, the sender of review messages and the
+	// bot's handlers, all set up before anything starts. The owner is told
+	// about posts and failures through the bot; without one the uploader
+	// only logs them.
+	var (
+		bot      *review.Bot
+		sender   *review.Sender
+		notifier upload.Notifier
+	)
 	if cfg.Telegram.Enabled() {
 		client := review.NewClient(cfg.Telegram.BotToken)
 		client.BaseURL = telegramURL
-		bot := review.NewBot(client, cfg.Telegram.OwnerChatID, logger)
-		loops.Go(func() { bot.Run(ctx) })
-		logger.Info("telegram bot started", "owner_chat_id", cfg.Telegram.OwnerChatID)
+		bot = review.NewBot(client, cfg.Telegram.OwnerChatID, logger)
+		notifier = upload.NotifyFunc(bot.Send)
 
-		// Review sender: posts each clip awaiting review to the owner's chat.
-		sender := review.NewSender(client, st, cfg.Telegram.OwnerChatID, cfg.DataDir, logger)
+		// The review message shows the title the clip will be posted with.
+		sender = review.NewSender(client, st, cfg.Telegram.OwnerChatID, cfg.DataDir, logger)
+		sender.PostTitle = upload.ReviewTitle(st, compose, reviewTarget(cfg))
+
+		if err := registerReview(cfg, st, q, client, bot, sender, logger); err != nil {
+			_ = ln.Close()
+			return err
+		}
+	}
+
+	// Uploader: posts approved clips to the enabled targets. No real target
+	// is implemented yet, so enabling one in the config stops startup.
+	uploader, err := upload.New(upload.Options{
+		Store:    st,
+		DataDir:  cfg.DataDir,
+		Config:   cfg.Upload,
+		Composer: compose,
+		Notifier: notifier,
+		Logger:   logger,
+	})
+	if err != nil {
+		_ = ln.Close()
+		return err
+	}
+
+	if bot != nil {
+		loops.Go(func() { bot.Run(ctx) })
 		loops.Go(func() { sender.Run(ctx) })
+		logger.Info("telegram bot started", "owner_chat_id", cfg.Telegram.OwnerChatID)
 	} else {
 		logger.Warn("telegram bot is off: pogfarm.telegram is not configured")
 	}
+	loops.Go(func() { uploader.Run(ctx) })
 
 	// Job API server. Cancelling ctx shuts it down gracefully: requests in
 	// flight, such as uploads, may finish within its shutdown timeout.
@@ -157,6 +198,46 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 	<-ctx.Done()
 	loops.Wait()
 	return errors.Join(serveErr, reaperErr, cleanupErr)
+}
+
+// registerReview registers the bot's handlers for reviewing clips: the
+// Approve, Reject and Undo buttons, the /status and /pending commands, and
+// replies that replace a clip's title. The title handler goes last, since a
+// later message handler would replace it.
+func registerReview(cfg *config.Pogfarm, st *store.Store, q *queue.Queue, client *review.Client, bot *review.Bot, sender *review.Sender, logger *slog.Logger) error {
+	decider, err := review.NewDecider(review.DeciderOptions{
+		Store:      st,
+		Client:     client,
+		Targets:    cfg.Upload.EnabledTargets(),
+		UndoWindow: cfg.Review.UndoWindow,
+		Logger:     logger,
+	})
+	if err != nil {
+		return err
+	}
+	decider.Register(bot)
+
+	reader, err := status.New(st, q, status.Options{})
+	if err != nil {
+		return err
+	}
+	commands, err := review.NewStatusCommands(reader, client, sender, review.StatusOptions{})
+	if err != nil {
+		return err
+	}
+	commands.Register(bot)
+
+	review.RegisterTitleOverride(bot, st)
+	return nil
+}
+
+// reviewTarget is the target whose title the review message shows: the
+// first enabled one. With none, the generic length limits apply.
+func reviewTarget(cfg *config.Pogfarm) string {
+	if targets := cfg.Upload.EnabledTargets(); len(targets) > 0 {
+		return targets[0]
+	}
+	return ""
 }
 
 // newSources builds the registry of stream platforms from the
