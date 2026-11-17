@@ -19,6 +19,7 @@
 // translate its errors (ErrNoJob, ErrUnknownJob, ErrLeaseLost,
 // ErrAlreadyCompleted, ErrNoClipper) into the answers of the job contract.
 //
-// The intake of results that marks a job done is not here yet; it builds on
-// the same Queue.
+// A job becomes done when its result arrives; that happens in package
+// intake, which marks the job done in the same transaction that stores the
+// clip.
 package queue
