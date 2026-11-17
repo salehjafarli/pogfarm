@@ -1,0 +1,43 @@
+# Keep the build context small and free of anything private. The Dockerfiles
+# copy only what they need, but everything not listed here is still sent to
+# the builder.
+
+# Version control and tooling
+.git
+.github
+.claude
+.idea
+.vscode
+**/.DS_Store
+
+# Secrets and real config
+**/.env
+**/.env.*
+**/secrets
+**/*.pem
+**/*.key
+**/config.yaml
+**/config.local.*
+
+# State, build output and media
+data
+scratch
+bin
+dist
+vendor
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.test
+**/*.out
+**/*.mp4
+**/*.mkv
+**/*.ts
+**/*.wav
+**/*.mp3
+**/*.m4a
+**/*.aac
+**/*.flac
+**/*.webm
+**/*.mov

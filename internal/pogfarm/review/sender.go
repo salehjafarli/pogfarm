@@ -78,6 +78,10 @@ type Sender struct {
 	PollInterval time.Duration
 	// MaxUploadBytes is the largest file sent as a video.
 	MaxUploadBytes int64
+	// PostTitle, when set, returns the title a clip will be posted with,
+	// which the review message then shows. An error is logged and the
+	// message is sent without the title.
+	PostTitle func(ctx context.Context, clipID int64) (string, error)
 
 	minBackoff time.Duration
 	maxBackoff time.Duration
@@ -373,6 +377,7 @@ func (s *Sender) load(ctx context.Context, id int64) (info clipInfo, file string
 	if clean(display) == "" {
 		info.Streamer = login
 	}
+	info.PostTitle = s.posttextTitle(ctx, id)
 	return info, filepath.Join(s.dataDir, filepath.FromSlash(path)), true, nil
 }
 

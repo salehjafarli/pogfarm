@@ -71,6 +71,8 @@ type Pogfarm struct {
 	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
 	Telegram Telegram `yaml:"telegram"`
+	// Review configures the approve and reject buttons. See review.go.
+	Review Review `yaml:"review"`
 
 	// TwitchDownloaderPath is the TwitchDownloaderCLI program used to
 	// download the chat of a Twitch VOD: a path, or a name looked up in
@@ -85,6 +87,13 @@ type Pogfarm struct {
 
 	// Scan configures the scanner loop. See scan.go.
 	Scan Scan `yaml:"scan"`
+
+	// Upload configures the loop that posts approved clips. See upload.go.
+	Upload Upload `yaml:"upload"`
+
+	// Post configures the title, description and tags of posted clips.
+	// See post.go.
+	Post Post `yaml:"post"`
 }
 
 // Streamer is one entry of the allowlist.
@@ -205,12 +214,16 @@ func defaults() file {
 				RejectedRetention: 24 * time.Hour,
 				PostedRetention:   7 * 24 * time.Hour,
 			},
+			Review: defaultReview(),
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 
 			Discovery: Discovery{MaxVODAge: 72 * time.Hour, Interval: 15 * time.Minute},
 
 			Scan: defaultScan(),
+
+			Upload: defaultUpload(),
+			Post:   defaultPost(),
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -311,6 +324,7 @@ func (c *Pogfarm) validate() []string {
 	problems = append(problems, c.Cleanup.validate()...)
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
+	problems = append(problems, c.Review.validate()...)
 
 	if c.TwitchDownloaderPath == "" {
 		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")
@@ -327,6 +341,8 @@ func (c *Pogfarm) validate() []string {
 			"pogfarm.discovery.interval (POGFARM_DISCOVERY_INTERVAL) must be a positive duration such as \"15m\": got %s", c.Discovery.Interval))
 	}
 	problems = append(problems, c.Scan.validate()...)
+	problems = append(problems, c.Upload.validate()...)
+	problems = append(problems, c.Post.validate()...)
 	return problems
 }
 
