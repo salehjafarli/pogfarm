@@ -34,26 +34,26 @@ const (
 	waitLimit = 30 * time.Second
 )
 
-// testConfig is a minimal valid configuration: a fresh data directory, a
-// loopback port chosen by the system, and no Telegram bot.
+// testConfig is a minimal valid configuration: every default of the config
+// loader, a fresh data directory, a loopback port chosen by the system, and
+// no Telegram bot. It is loaded from a file, so it gets the same defaults
+// the binary does, and environment variables still override it.
 func testConfig(t *testing.T) *config.Pogfarm {
 	t.Helper()
-	return &config.Pogfarm{
-		ListenAddr:   "127.0.0.1:0",
-		DataDir:      filepath.Join(t.TempDir(), "data"),
-		APISecret:    config.NewSecret(testSecret),
-		MaxClipBytes: config.DefaultMaxClipBytes,
-		Queue: config.Queue{
-			LeaseDuration:  2 * time.Minute,
-			MaxAttempts:    3,
-			ReaperInterval: 15 * time.Second,
-		},
-		Cleanup: config.Cleanup{
-			Interval:          30 * time.Minute,
-			RejectedRetention: 24 * time.Hour,
-			PostedRetention:   7 * 24 * time.Hour,
-		},
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := "pogfarm:\n" +
+		"  listen_addr: \"127.0.0.1:0\"\n" +
+		"  data_dir: \"" + filepath.ToSlash(filepath.Join(dir, "data")) + "\"\n" +
+		"  api_secret: \"" + testSecret + "\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	cfg, err := config.LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
 
 // logBuffer is a log destination that is safe for concurrent use and can

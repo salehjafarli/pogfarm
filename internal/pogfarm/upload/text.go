@@ -17,10 +17,6 @@ import (
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/store"
 )
 
-// TextComposer builds what a clip is posted with on one target: its title,
-// description and tags. It has the shape of the uploader's Composer.
-type TextComposer func(ctx context.Context, clip store.Clip, target string) (title, description string, tags []string, err error)
-
 // Limits are the length limits of one target.
 type Limits struct {
 	// Title is the most characters (runes) of the title.
@@ -326,7 +322,7 @@ func truncate(s string, limit int, measure func(string) int) string {
 // template in cfg and the clip's transcript, and fits it to the target's
 // limits. A title override stored on the clip replaces the generated
 // title, and is cut to the target's limit too.
-func NewComposer(st *store.Store, cfg config.Post) TextComposer {
+func NewComposer(st *store.Store, cfg config.Post) Composer {
 	return func(ctx context.Context, clip store.Clip, target string) (string, string, []string, error) {
 		src, override, err := loadSource(ctx, st.Reader(), clip.ID)
 		if err != nil {
@@ -351,7 +347,7 @@ func NewComposer(st *store.Store, cfg config.Post) TextComposer {
 // ReviewTitle returns a function giving the title a clip will be posted
 // with on target. It is meant for review.Sender.PostTitle, so the review
 // message shows the title.
-func ReviewTitle(st *store.Store, compose TextComposer, target string) func(ctx context.Context, clipID int64) (string, error) {
+func ReviewTitle(st *store.Store, compose Composer, target string) func(ctx context.Context, clipID int64) (string, error) {
 	return func(ctx context.Context, clipID int64) (string, error) {
 		clip, err := store.GetClip(ctx, st.Reader(), clipID)
 		if err != nil {
