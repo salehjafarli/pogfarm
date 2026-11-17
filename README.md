@@ -25,6 +25,12 @@ State lives in a single SQLite file owned by this service.
 
 Clippers are stateless and only ever make outbound calls to pogfarm, so nodes can join or leave at any time.
 
+## Content and permissions
+
+pogfarm only touches content from streamers it has been told about.
+
+- **Allowlist only.** The scheduler works from an explicit allowlist of streamers in the config. It never discovers or scans streamers on its own.
+
 ## Status
 
-Design stage. Twitch is the only source for now; source-specific code sits behind one interface so other platforms can be added.
+Early development. The design is settled and the work is tracked in the repository's issues; nothing runs end to end yet. Twitch is the only source for now; source-specific code sits behind one interface so other platforms can be added.
