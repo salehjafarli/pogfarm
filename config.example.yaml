@@ -56,6 +56,25 @@ pogfarm:
     # Env: POGFARM_QUEUE_REAPER_INTERVAL. Default "15s".
     reaper_interval: "15s"
 
+  # When the files of finished clips are deleted from the data directory.
+  # Clips pending review, and approved clips not yet posted to every target,
+  # are never deleted. Leftover uploads are removed at startup, and files no
+  # clip refers to are removed once they are an hour old.
+  cleanup:
+    # How often the cleanup runs. A duration such as "30m", at least "1m".
+    # Env: POGFARM_CLEANUP_INTERVAL. Default "30m".
+    interval: "30m"
+
+    # How long the file of a rejected clip is kept after the rejection.
+    # At least "1h".
+    # Env: POGFARM_CLEANUP_REJECTED_RETENTION. Default "24h".
+    rejected_retention: "24h"
+
+    # How long the file of a clip that has been posted to every target is
+    # kept after its last post. At least "1h".
+    # Env: POGFARM_CLEANUP_POSTED_RETENTION. Default "168h" (7 days).
+    posted_retention: "168h"
+
   # Twitch API credentials, from an application registered in the Twitch
   # developer console. pogfarm uses them to obtain an app access token.
   # Set both keys or neither.

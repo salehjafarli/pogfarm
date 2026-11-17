@@ -24,6 +24,12 @@
 // that no row refers to. A crash before the rename leaves a file in TempDir,
 // which is emptied on start.
 //
+// File cleanup. A Cleaner (Intake.NewCleaner) owns the lifetime of the
+// files: EmptyTemp empties TempDir at startup, and Sweep, which Run calls
+// on a timer, deletes the files of rejected clips and of clips posted to
+// every target once their retention is over, recording file_removed_at,
+// and deletes orphans. ClipPath is the one place clip paths are built.
+//
 // Intake serves one data directory and there is one Intake per process;
 // pogfarm itself runs exactly once.
 package intake
