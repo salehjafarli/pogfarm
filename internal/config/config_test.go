@@ -25,7 +25,9 @@ const (
 var allEnv = []string{
 	EnvConfigPath,
 	"POGFARM_LISTEN_ADDR", "POGFARM_DATA_DIR", "POGFARM_API_SECRET", "POGFARM_API_SECRET_FILE",
+	"POGFARM_TELEGRAM_BOT_TOKEN", "POGFARM_TELEGRAM_BOT_TOKEN_FILE", "POGFARM_TELEGRAM_OWNER_CHAT_ID",
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
+	"POGFARM_TWITCH_CLIENT_ID", "POGFARM_TWITCH_CLIENT_SECRET", "POGFARM_TWITCH_CLIENT_SECRET_FILE",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
@@ -311,6 +313,8 @@ func TestExampleFileLoads(t *testing.T) {
 	t.Setenv("POGFARM_API_SECRET", goodSecret)
 	t.Setenv("CLIPPER_API_SECRET", goodSecret)
 	t.Setenv("CLIPPER_NAME", "example-node")
+	t.Setenv("POGFARM_TWITCH_CLIENT_ID", twitchID)
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", twitchSecret)
 
 	if _, err := LoadPogfarm(example); err != nil {
 		t.Errorf("pogfarm: %v", err)
@@ -327,7 +331,10 @@ func TestExamplePlaceholderSecretIsRejected(t *testing.T) {
 
 	_, err := LoadPogfarm(example)
 	got := problemsOf(t, err)
-	if len(got) != 1 || !strings.Contains(got[0], "pogfarm.api_secret is still the example placeholder") {
+	if len(got) != 3 ||
+		!strings.Contains(got[0], "pogfarm.api_secret is still the example placeholder") ||
+		!strings.Contains(got[1], "pogfarm.twitch.client_id is still the example placeholder") ||
+		!strings.Contains(got[2], "pogfarm.twitch.client_secret is still the example placeholder") {
 		t.Errorf("pogfarm: unexpected problems: %v", got)
 	}
 
@@ -473,4 +480,253 @@ func TestApplyEnvScalarTypes(t *testing.T) {
 			t.Errorf("a bad value should not change the field: %+v", s)
 		}
 	})
+}
+
+// Twitch credentials.
+
+const (
+	twitchID     = "abcdefghijklmnopqrstuvwxyz0123"
+	twitchSecret = "twitch-client-secret-for-tests"
+)
+
+func TestTwitchCredentialsAreOptional(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Twitch.ClientID != "" || cfg.Twitch.ClientSecret.IsSet() {
+		t.Errorf("twitch credentials should be unset by default: %+v", cfg.Twitch)
+	}
+}
+
+func TestTwitchCredentialsFromFileEnvAndSecretFile(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  twitch:
+    client_id: file-id
+    client_secret: `+otherSecret+`
+`)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Twitch.ClientID != "file-id" || cfg.Twitch.ClientSecret.Reveal() != otherSecret {
+		t.Errorf("file values not loaded: %+v", cfg.Twitch)
+	}
+
+	t.Setenv("POGFARM_TWITCH_CLIENT_ID", twitchID)
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", twitchSecret)
+	cfg, err = LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Twitch.ClientID != twitchID || cfg.Twitch.ClientSecret.Reveal() != twitchSecret {
+		t.Error("the environment should override the file")
+	}
+
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", "")
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET_FILE", writeFile(t, "twitch_secret", twitchSecret+"\n"))
+	cfg, err = LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Twitch.ClientSecret.Reveal() != twitchSecret {
+		t.Error("secret not read from the secret file")
+	}
+}
+
+func TestTwitchCredentialsValidation(t *testing.T) {
+	tests := []struct {
+		name, id, secret string
+		want             string
+	}{
+		{"id without secret", twitchID, "", "pogfarm.twitch.client_secret is required when pogfarm.twitch.client_id is set"},
+		{"secret without id", "", twitchSecret, "pogfarm.twitch.client_id is required when pogfarm.twitch.client_secret is set"},
+		{"placeholder secret", twitchID, SecretPlaceholder, "pogfarm.twitch.client_secret is still the example placeholder"},
+		{"placeholder id", SecretPlaceholder, twitchSecret, "pogfarm.twitch.client_id is still the example placeholder"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanEnv(t)
+			t.Setenv("POGFARM_API_SECRET", goodSecret)
+			t.Setenv("POGFARM_TWITCH_CLIENT_ID", tt.id)
+			t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", tt.secret)
+
+			_, err := LoadPogfarm("")
+			got := problemsOf(t, err)
+			if len(got) != 1 || !strings.Contains(got[0], tt.want) {
+				t.Errorf("want one problem containing %q, got %v", tt.want, got)
+			}
+			if strings.Contains(err.Error(), twitchSecret) {
+				t.Errorf("validation message must not echo the secret: %v", err)
+			}
+		})
+	}
+}
+
+func TestTwitchSecretIsNeverPrinted(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("POGFARM_TWITCH_CLIENT_ID", twitchID)
+	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", twitchSecret)
+
+	p, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputs := map[string]string{"String": p.String()}
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%x"} {
+		outputs["pogfarm "+verb] = fmt.Sprintf(verb, *p)
+		outputs["twitch "+verb] = fmt.Sprintf(verb, p.Twitch)
+	}
+	j, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs["json"] = string(j)
+	var text bytes.Buffer
+	slog.New(slog.NewTextHandler(&text, nil)).Info("loaded", "config", p, "twitch", p.Twitch)
+	outputs["slog"] = text.String()
+
+	hexSecret := fmt.Sprintf("%x", twitchSecret)
+	for name, out := range outputs {
+		if strings.Contains(out, twitchSecret) || strings.Contains(strings.ToLower(out), hexSecret) {
+			t.Errorf("%s leaks the twitch client secret: %s", name, out)
+		}
+	}
+	if !strings.Contains(p.String(), "client_id: "+twitchID) {
+		t.Errorf("String should still show the client id, got:\n%s", p.String())
+	}
+}
+
+// Telegram bot.
+
+const goodBotToken = "123456789:AAbbCCddEEffGGhhIIjjKKllMMnnOOppQQ"
+
+func TestTelegramIsOffByDefault(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Telegram.Enabled() {
+		t.Error("the bot must be off when nothing is configured")
+	}
+}
+
+func TestTelegramFromFile(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  api_secret: `+goodSecret+`
+  telegram:
+    bot_token: "`+goodBotToken+`"
+    owner_chat_id: 4242
+`)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Telegram.Enabled() || cfg.Telegram.BotToken.Reveal() != goodBotToken || cfg.Telegram.OwnerChatID != 4242 {
+		t.Errorf("telegram settings not loaded: enabled=%v owner=%d", cfg.Telegram.Enabled(), cfg.Telegram.OwnerChatID)
+	}
+}
+
+func TestTelegramFromEnvAndSecretFile(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  telegram:
+    bot_token: "from-the-file-and-overridden"
+    owner_chat_id: 1
+`)
+	t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN_FILE", writeFile(t, "token", goodBotToken+"\n"))
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "-1001234567890")
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Telegram.BotToken.Reveal() != goodBotToken {
+		t.Error("token not taken from the secret file")
+	}
+	if cfg.Telegram.OwnerChatID != -1001234567890 {
+		t.Errorf("owner chat id not taken from the environment: %d", cfg.Telegram.OwnerChatID)
+	}
+
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "me")
+	_, err = LoadPogfarm(path)
+	if got := strings.Join(problemsOf(t, err), "\n"); !strings.Contains(got, "POGFARM_TELEGRAM_OWNER_CHAT_ID: not a whole number") {
+		t.Errorf("unexpected problems: %s", got)
+	}
+}
+
+func TestTelegramValidation(t *testing.T) {
+	cases := []struct {
+		name, token, owner, want string
+	}{
+		{"token without owner", goodBotToken, "", "pogfarm.telegram.owner_chat_id (POGFARM_TELEGRAM_OWNER_CHAT_ID) is required"},
+		{"owner without token", "", "4242", "pogfarm.telegram.bot_token is required"},
+		{"placeholder token", SecretPlaceholder, "4242", "pogfarm.telegram.bot_token is still the example placeholder"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanEnv(t)
+			t.Setenv("POGFARM_API_SECRET", goodSecret)
+			t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN", tc.token)
+			t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", tc.owner)
+
+			_, err := LoadPogfarm("")
+			got := problemsOf(t, err)
+			if len(got) != 1 || !strings.Contains(got[0], tc.want) {
+				t.Errorf("want one problem containing %q, got %v", tc.want, got)
+			}
+			if tc.token != "" && tc.token != SecretPlaceholder && strings.Contains(err.Error(), tc.token) {
+				t.Errorf("validation message leaks the token: %v", err)
+			}
+		})
+	}
+}
+
+func TestTelegramTokenIsNeverPrinted(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN", goodBotToken)
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "4242")
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var log bytes.Buffer
+	slog.New(slog.NewTextHandler(&log, nil)).Info("loaded", "config", cfg, "telegram", cfg.Telegram)
+	j, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, out := range map[string]string{
+		"String": cfg.String(),
+		"%+v":    fmt.Sprintf("%+v %+v", cfg, cfg.Telegram),
+		"%#v":    fmt.Sprintf("%#v", cfg.Telegram),
+		"slog":   log.String(),
+		"json":   string(j),
+	} {
+		if strings.Contains(out, goodBotToken) {
+			t.Errorf("%s leaks the bot token: %s", name, out)
+		}
+	}
+	if !strings.Contains(cfg.String(), "owner_chat_id: 4242") {
+		t.Errorf("String should still show the owner chat id, got:\n%s", cfg.String())
+	}
 }
