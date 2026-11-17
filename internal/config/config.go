@@ -22,6 +22,10 @@ const EnvConfigPath = "POGFARM_CONFIG"
 // sends several heartbeats per lease, so a shorter one could not be kept.
 const MinLeaseDuration = 10 * time.Second
 
+// MinReaperInterval is the shortest interval between two passes of the lease
+// reaper that is accepted.
+const MinReaperInterval = time.Second
+
 // MinSecretLength is the shortest shared API secret that is accepted.
 const MinSecretLength = 16
 
@@ -92,6 +96,12 @@ type Queue struct {
 	// LeaseDuration is how long a claimed job stays with its clipper unless
 	// a heartbeat extends the lease.
 	LeaseDuration time.Duration `yaml:"lease_duration" env:"POGFARM_QUEUE_LEASE_DURATION"`
+	// MaxAttempts is how many times a job is handed out before a failure or
+	// an expired lease marks it failed instead of queueing it again.
+	MaxAttempts int `yaml:"max_attempts" env:"POGFARM_QUEUE_MAX_ATTEMPTS"`
+	// ReaperInterval is how often pogfarm looks for jobs whose lease has
+	// expired and takes them back.
+	ReaperInterval time.Duration `yaml:"reaper_interval" env:"POGFARM_QUEUE_REAPER_INTERVAL"`
 }
 
 // Twitch is the "twitch" section of the main service's configuration: the
@@ -145,7 +155,11 @@ func defaults() file {
 		Pogfarm: Pogfarm{
 			ListenAddr: ":8080",
 			DataDir:    "data",
-			Queue:      Queue{LeaseDuration: 2 * time.Minute},
+			Queue: Queue{
+				LeaseDuration:  2 * time.Minute,
+				MaxAttempts:    3,
+				ReaperInterval: 15 * time.Second,
+			},
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 
@@ -232,6 +246,16 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, fmt.Sprintf(
 			"pogfarm.queue.lease_duration (POGFARM_QUEUE_LEASE_DURATION) must be at least %s: got %s",
 			MinLeaseDuration, c.Queue.LeaseDuration))
+	}
+	if c.Queue.MaxAttempts < 1 {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.queue.max_attempts (POGFARM_QUEUE_MAX_ATTEMPTS) must be at least 1: got %d",
+			c.Queue.MaxAttempts))
+	}
+	if c.Queue.ReaperInterval < MinReaperInterval {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.queue.reaper_interval (POGFARM_QUEUE_REAPER_INTERVAL) must be at least %s: got %s",
+			MinReaperInterval, c.Queue.ReaperInterval))
 	}
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)

@@ -4,6 +4,12 @@
 //
 //	queued --Claim--> leased --Fail (retryable, attempts remain)--> queued
 //	                         --Fail (otherwise)-------------------> failed
+//	                         --Reap (lease expired, attempts remain)--> queued
+//	                         --Reap (lease expired, last attempt)-----> failed
+//
+// While it works, the holder keeps the lease with Heartbeat. Reap, which
+// RunReaper calls on a timer, takes back the jobs whose holder stopped
+// sending heartbeats. Clippers lists the clippers the queue has seen.
 //
 // Every change is one write transaction on the store's single write
 // connection, so changes happen one after another and two clippers can never
@@ -13,7 +19,6 @@
 // translate its errors (ErrNoJob, ErrUnknownJob, ErrLeaseLost,
 // ErrAlreadyCompleted, ErrNoClipper) into the answers of the job contract.
 //
-// Heartbeats and the reaper that takes back expired leases, and the intake of
-// results that marks a job done, are not here yet; they build on the same
-// Queue.
+// The intake of results that marks a job done is not here yet; it builds on
+// the same Queue.
 package queue
