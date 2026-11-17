@@ -30,6 +30,16 @@ const DefaultMaxClipBytes = 256 << 20
 // reaper that is accepted.
 const MinReaperInterval = time.Second
 
+// Lower bounds of the cleanup settings.
+const (
+	// MinCleanupInterval is the shortest interval between two cleanup
+	// passes that is accepted.
+	MinCleanupInterval = time.Minute
+	// MinCleanupRetention is the shortest retention of a clip file that is
+	// accepted. It leaves time to undo a rejection.
+	MinCleanupRetention = time.Hour
+)
+
 // MinSecretLength is the shortest shared API secret that is accepted.
 const MinSecretLength = 16
 
@@ -55,6 +65,8 @@ type Pogfarm struct {
 
 	// Queue configures the job queue.
 	Queue Queue `yaml:"queue"`
+	// Cleanup configures when clip files are deleted.
+	Cleanup Cleanup `yaml:"cleanup"`
 	// Twitch holds the credentials for the Twitch API.
 	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
@@ -116,6 +128,21 @@ type Queue struct {
 	ReaperInterval time.Duration `yaml:"reaper_interval" env:"POGFARM_QUEUE_REAPER_INTERVAL"`
 }
 
+// Cleanup is the "cleanup" section of the main service's configuration:
+// when the files of finished clips are deleted from the data directory.
+// Clips pending review, and approved clips not yet posted to every target,
+// are never deleted.
+type Cleanup struct {
+	// Interval is how often the cleanup runs.
+	Interval time.Duration `yaml:"interval" env:"POGFARM_CLEANUP_INTERVAL"`
+	// RejectedRetention is how long the file of a rejected clip is kept
+	// after the rejection.
+	RejectedRetention time.Duration `yaml:"rejected_retention" env:"POGFARM_CLEANUP_REJECTED_RETENTION"`
+	// PostedRetention is how long the file of a clip posted to every target
+	// is kept after its last post.
+	PostedRetention time.Duration `yaml:"posted_retention" env:"POGFARM_CLEANUP_POSTED_RETENTION"`
+}
+
 // Twitch is the "twitch" section of the main service's configuration: the
 // credentials of the application registered with Twitch, which pogfarm uses
 // to obtain an app access token. Both keys are set, or neither.
@@ -172,6 +199,11 @@ func defaults() file {
 				LeaseDuration:  2 * time.Minute,
 				MaxAttempts:    3,
 				ReaperInterval: 15 * time.Second,
+			},
+			Cleanup: Cleanup{
+				Interval:          30 * time.Minute,
+				RejectedRetention: 24 * time.Hour,
+				PostedRetention:   7 * 24 * time.Hour,
 			},
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
@@ -276,6 +308,7 @@ func (c *Pogfarm) validate() []string {
 			"pogfarm.queue.reaper_interval (POGFARM_QUEUE_REAPER_INTERVAL) must be at least %s: got %s",
 			MinReaperInterval, c.Queue.ReaperInterval))
 	}
+	problems = append(problems, c.Cleanup.validate()...)
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
 
@@ -342,6 +375,26 @@ func (c *Pogfarm) validateStreamers() []string {
 				"%s repeats the streamer %s/%s: list each streamer once", name, s.Platform, s.Login))
 		}
 		seen[k] = true
+	}
+	return problems
+}
+
+func (c Cleanup) validate() []string {
+	var problems []string
+	if c.Interval < MinCleanupInterval {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.cleanup.interval (POGFARM_CLEANUP_INTERVAL) must be at least %s: got %s",
+			MinCleanupInterval, c.Interval))
+	}
+	if c.RejectedRetention < MinCleanupRetention {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.cleanup.rejected_retention (POGFARM_CLEANUP_REJECTED_RETENTION) must be at least %s: got %s",
+			MinCleanupRetention, c.RejectedRetention))
+	}
+	if c.PostedRetention < MinCleanupRetention {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.cleanup.posted_retention (POGFARM_CLEANUP_POSTED_RETENTION) must be at least %s: got %s",
+			MinCleanupRetention, c.PostedRetention))
 	}
 	return problems
 }

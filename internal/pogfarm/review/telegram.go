@@ -168,15 +168,25 @@ func (c *Client) call(ctx context.Context, timeout time.Duration, method string,
 	if err != nil {
 		return fmt.Errorf("telegram %s: encode request: %w", method, err)
 	}
+	return c.do(ctx, timeout, method, bytes.NewReader(body), int64(len(body)), "application/json", result)
+}
 
+// do posts body to a Bot API method and decodes the response. body is closed
+// by the HTTP client when it is an io.Closer.
+func (c *Client) do(ctx context.Context, timeout time.Duration, method string, body io.Reader, length int64,
+	contentType string, result any) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	endpoint := c.BaseURL + "/bot" + c.token.Reveal() + "/" + method
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
+		if closer, ok := body.(io.Closer); ok {
+			_ = closer.Close()
+		}
 		return c.safeError(method, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = length
+	req.Header.Set("Content-Type", contentType)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

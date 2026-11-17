@@ -74,6 +74,7 @@ func TestRunStartsScanning(t *testing.T) {
 	}
 	t.Setenv("POGFARM_API_SECRET", "a-secret-that-is-long-enough")
 	t.Setenv("POGFARM_DATA_DIR", dir)
+	t.Setenv("POGFARM_LISTEN_ADDR", "127.0.0.1:0")
 	t.Setenv("POGFARM_TWITCH_CLIENT_ID", "made-up-client-id")
 	t.Setenv("POGFARM_TWITCH_CLIENT_SECRET", "made-up-client-secret")
 	t.Setenv("POGFARM_TWITCH_DOWNLOADER_PATH", tool)
@@ -141,7 +142,7 @@ func TestRunWithoutTwitchSkipsScanning(t *testing.T) {
 	sink := &msgSink{msgs: make(chan string, 100)}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := run(ctx, &config.Pogfarm{}, slog.New(sink), "http://127.0.0.1:1"); err != nil {
+	if err := run(ctx, testConfig(t), slog.New(sink), "http://127.0.0.1:1"); err != nil {
 		t.Fatal(err)
 	}
 	if !sink.contains("discovery and scanning are off") {
@@ -149,8 +150,8 @@ func TestRunWithoutTwitchSkipsScanning(t *testing.T) {
 	}
 }
 
-func TestRunFailsWhenTheStoreCannotOpen(t *testing.T) {
-	// The data directory is a file, so the database cannot be created in it.
+func TestRunFailsWhenTheDataDirIsUnusable(t *testing.T) {
+	// The data directory is a file, so nothing can be created in it.
 	file := filepath.Join(t.TempDir(), "not-a-dir")
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
