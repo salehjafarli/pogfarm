@@ -34,6 +34,9 @@ type Pogfarm struct {
 	DataDir string `yaml:"data_dir" env:"POGFARM_DATA_DIR"`
 	// APISecret is the shared secret clippers present to the job API.
 	APISecret Secret `yaml:"api_secret" env:"POGFARM_API_SECRET"`
+
+	// Twitch holds the credentials for the Twitch API.
+	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
 	Telegram Telegram `yaml:"telegram"`
 
@@ -41,6 +44,16 @@ type Pogfarm struct {
 	// download the chat of a Twitch VOD: a path, or a name looked up in
 	// PATH.
 	TwitchDownloaderPath string `yaml:"twitch_downloader_path" env:"POGFARM_TWITCH_DOWNLOADER_PATH"`
+}
+
+// Twitch is the "twitch" section of the main service's configuration: the
+// credentials of the application registered with Twitch, which pogfarm uses
+// to obtain an app access token. Both keys are set, or neither.
+type Twitch struct {
+	// ClientID is the client id of the registered application.
+	ClientID string `yaml:"client_id" env:"POGFARM_TWITCH_CLIENT_ID"`
+	// ClientSecret is the client secret of the registered application.
+	ClientSecret Secret `yaml:"client_secret" env:"POGFARM_TWITCH_CLIENT_SECRET"`
 }
 
 // Telegram is the configuration of the review bot. Both fields are set, or
@@ -164,10 +177,39 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, "pogfarm.data_dir (POGFARM_DATA_DIR) must not be empty")
 	}
 	problems = append(problems, checkSecret("pogfarm.api_secret", "POGFARM_API_SECRET", c.APISecret)...)
+	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
 
 	if c.TwitchDownloaderPath == "" {
 		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")
+	}
+	return problems
+}
+
+// validate checks the Twitch credentials without ever putting the secret in
+// a message. They are optional as a pair: with neither set there is nothing
+// to check, and the Twitch client refuses to be built without them.
+func (c *Twitch) validate() []string {
+	const (
+		idKey, idEnv         = "pogfarm.twitch.client_id", "POGFARM_TWITCH_CLIENT_ID"
+		secretKey, secretEnv = "pogfarm.twitch.client_secret", "POGFARM_TWITCH_CLIENT_SECRET"
+	)
+	var problems []string
+	switch {
+	case c.ClientID == SecretPlaceholder:
+		problems = append(problems, fmt.Sprintf(
+			"%s is still the example placeholder: set %s to the client id of your Twitch application", idKey, idEnv))
+	case c.ClientID == "" && c.ClientSecret.IsSet():
+		problems = append(problems, fmt.Sprintf(
+			"%s is required when %s is set: set %s", idKey, secretKey, idEnv))
+	}
+	switch {
+	case c.ClientSecret.Reveal() == SecretPlaceholder:
+		problems = append(problems, fmt.Sprintf(
+			"%s is still the example placeholder: set %s, or %s_FILE, to the client secret of your Twitch application", secretKey, secretEnv, secretEnv))
+	case !c.ClientSecret.IsSet() && c.ClientID != "":
+		problems = append(problems, fmt.Sprintf(
+			"%s is required when %s is set: set %s, or %s_FILE to a file containing it", secretKey, idKey, secretEnv, secretEnv))
 	}
 	return problems
 }
