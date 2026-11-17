@@ -281,3 +281,27 @@ Clients act on `code` and never on `message`, which is for logs and never contai
 | `internal` | 500 | pogfarm failed; the call can be retried |
 
 A client that receives a code it does not know treats it by status: 5xx as retryable, 4xx as not.
+
+## Go client
+
+`api.Client` (built with `api.NewClient`) is the typed client for these four operations; the clipper and tests use it instead of speaking HTTP themselves. Callers match errors with `errors.Is` and never look at status codes.
+
+| Answer | Go error |
+|---|---|
+| `job: null` on claim | `ErrNoJob` (a `*NoJobError` carrying `retry_after_seconds`) |
+| `unauthenticated` | `ErrUnauthorized` |
+| `invalid_request` | `ErrInvalidRequest` |
+| `unknown_job` | `ErrUnknownJob` |
+| `lease_lost` | `ErrLeaseLost` |
+| `already_completed` on heartbeat and fail | `ErrAlreadyCompleted` |
+| `payload_too_large` | `ErrPayloadTooLarge` |
+| `checksum_mismatch` | `ErrChecksumMismatch` |
+| `internal` | `ErrInternal` |
+| Any other non-2xx answer | `*Error` with the status, and the code if there was one |
+| 2xx with an unusable body | `ErrBadResponse` |
+
+- Every call takes a context. Each attempt has its own timeout: short for claim, heartbeat and fail, long for complete.
+- Heartbeat, complete and fail are retried with backoff after a network error, a timed-out attempt or a 5xx status. A 4xx status is never retried, which includes `checksum_mismatch`: the caller decides whether to upload again.
+- Claim is not retried by the client. It is not idempotent, since a claim whose answer was lost has still handed out a job, and the clipper asks again anyway.
+- Complete streams the clip from disk and opens the file again for every attempt.
+- The client does not follow redirects, so the secret is only ever sent to the configured pogfarm URL. A redirect is reported as an `*Error` with the 3xx status.
