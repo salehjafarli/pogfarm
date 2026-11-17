@@ -31,6 +31,14 @@ pogfarm:
   # Env: POGFARM_API_SECRET or POGFARM_API_SECRET_FILE.
   api_secret: "change-me"
 
+  # Job queue.
+  queue:
+    # How long a claimed job stays with its clipper without a heartbeat
+    # before pogfarm takes it back. Clippers are told to send a heartbeat
+    # four times per lease. A duration such as "90s" or "2m", at least "10s".
+    # Env: POGFARM_QUEUE_LEASE_DURATION. Default "2m".
+    lease_duration: "2m"
+
   # Twitch API credentials, from an application registered in the Twitch
   # developer console. pogfarm uses them to obtain an app access token.
   # Set both keys or neither.

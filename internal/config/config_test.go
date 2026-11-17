@@ -28,6 +28,7 @@ var allEnv = []string{
 	"POGFARM_TELEGRAM_BOT_TOKEN", "POGFARM_TELEGRAM_BOT_TOKEN_FILE", "POGFARM_TELEGRAM_OWNER_CHAT_ID",
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
 	"POGFARM_TWITCH_CLIENT_ID", "POGFARM_TWITCH_CLIENT_SECRET", "POGFARM_TWITCH_CLIENT_SECRET_FILE",
+	"POGFARM_QUEUE_LEASE_DURATION",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
@@ -728,5 +729,50 @@ func TestTelegramTokenIsNeverPrinted(t *testing.T) {
 	}
 	if !strings.Contains(cfg.String(), "owner_chat_id: 4242") {
 		t.Errorf("String should still show the owner chat id, got:\n%s", cfg.String())
+	}
+}
+
+func TestQueueLeaseDuration(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string // value of pogfarm.queue.lease_duration; "" leaves the key out
+		env     string
+		want    time.Duration
+		problem string
+	}{
+		{name: "default", want: 2 * time.Minute},
+		{name: "from file", file: "90s", want: 90 * time.Second},
+		{name: "env overrides file", file: "90s", env: "5m", want: 5 * time.Minute},
+		{name: "minimum", env: "10s", want: 10 * time.Second},
+		{name: "too short", file: "9s", problem: "pogfarm.queue.lease_duration (POGFARM_QUEUE_LEASE_DURATION) must be at least 10s: got 9s"},
+		{name: "zero", env: "0s", problem: "must be at least 10s: got 0s"},
+		{name: "negative", file: "-2m", problem: "must be at least 10s: got -2m0s"},
+		{name: "not a duration", env: "soon", problem: "POGFARM_QUEUE_LEASE_DURATION: not a duration"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanEnv(t)
+			content := "pogfarm:\n  api_secret: " + goodSecret + "\n"
+			if tt.file != "" {
+				content += "  queue:\n    lease_duration: " + tt.file + "\n"
+			}
+			if tt.env != "" {
+				t.Setenv("POGFARM_QUEUE_LEASE_DURATION", tt.env)
+			}
+			cfg, err := LoadPogfarm(writeFile(t, "config.yaml", content))
+			if tt.problem != "" {
+				problems := problemsOf(t, err)
+				if len(problems) != 1 || !strings.Contains(problems[0], tt.problem) {
+					t.Fatalf("problems = %q, want one containing %q", problems, tt.problem)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Queue.LeaseDuration != tt.want {
+				t.Errorf("lease duration = %s, want %s", cfg.Queue.LeaseDuration, tt.want)
+			}
+		})
 	}
 }
