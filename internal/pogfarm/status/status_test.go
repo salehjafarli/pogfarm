@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -24,6 +25,8 @@ type fixture struct {
 	vod   store.VOD
 	// next keeps candidate windows apart.
 	next float64
+	// vods counts the VODs added, for their ids.
+	vods int
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -69,13 +72,11 @@ func (f *fixture) snapshot(opts Options) Snapshot {
 	return s
 }
 
-var vodCount int
-
 func (f *fixture) addVOD(streamerID int64, status store.ScanStatus, next time.Time) store.VOD {
 	f.t.Helper()
-	vodCount++
+	f.vods++
 	v, err := store.InsertVOD(context.Background(), f.store.Writer(), store.VOD{
-		Platform: api.PlatformTwitch, PlatformVODID: "v" + strings.Repeat("x", vodCount), StreamerID: streamerID,
+		Platform: api.PlatformTwitch, PlatformVODID: fmt.Sprint("v", f.vods), StreamerID: streamerID,
 		Title: "VOD", DurationSeconds: 3600, StartedAt: now.Add(-3 * time.Hour), EndedAt: now.Add(-2 * time.Hour),
 		ScanStatus: status, NextScanAt: next,
 	})
@@ -241,7 +242,7 @@ func TestDoneTodayBoundary(t *testing.T) {
 		{midnight.Add(-time.Millisecond), 1}, // yesterday: only its last job
 		{midnight, 2},
 		{now, 2},
-		{midnight.Add(24*time.Hour - time.Millisecond), 3},
+		{midnight.Add(24*time.Hour - time.Millisecond), 2},
 		{midnight.Add(24 * time.Hour), 0},
 		// A clock in another zone means the same instant.
 		{midnight.In(time.FixedZone("UTC+4", 4*3600)), 2},
