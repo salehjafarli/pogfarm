@@ -190,7 +190,7 @@ func TestCoreTablesMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
-		if got, want := strings.Join(appliedList(t, s.Reader()), ","), "1:core_tables"; got != want {
+		if got, want := strings.Join(appliedList(t, s.Reader()), ","), "1:core_tables,2:upload_attention"; got != want {
 			t.Errorf("open %d: applied migrations = %q, want %q", i, got, want)
 		}
 		for _, table := range coreTables {

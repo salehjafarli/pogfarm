@@ -87,6 +87,9 @@ type Pogfarm struct {
 
 	// Scan configures the scanner loop. See scan.go.
 	Scan Scan `yaml:"scan"`
+
+	// Upload configures the loop that posts approved clips. See upload.go.
+	Upload Upload `yaml:"upload"`
 }
 
 // Streamer is one entry of the allowlist.
@@ -214,6 +217,8 @@ func defaults() file {
 			Discovery: Discovery{MaxVODAge: 72 * time.Hour, Interval: 15 * time.Minute},
 
 			Scan: defaultScan(),
+
+			Upload: defaultUpload(),
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -331,6 +336,7 @@ func (c *Pogfarm) validate() []string {
 			"pogfarm.discovery.interval (POGFARM_DISCOVERY_INTERVAL) must be a positive duration such as \"15m\": got %s", c.Discovery.Interval))
 	}
 	problems = append(problems, c.Scan.validate()...)
+	problems = append(problems, c.Upload.validate()...)
 	return problems
 }
 
