@@ -37,6 +37,8 @@ type Pogfarm struct {
 
 	// Twitch holds the credentials for the Twitch API.
 	Twitch Twitch `yaml:"twitch"`
+	// Telegram configures the review bot.
+	Telegram Telegram `yaml:"telegram"`
 }
 
 // Twitch is the "twitch" section of the main service's configuration: the
@@ -47,6 +49,21 @@ type Twitch struct {
 	ClientID string `yaml:"client_id" env:"POGFARM_TWITCH_CLIENT_ID"`
 	// ClientSecret is the client secret of the registered application.
 	ClientSecret Secret `yaml:"client_secret" env:"POGFARM_TWITCH_CLIENT_SECRET"`
+}
+
+// Telegram is the configuration of the review bot. Both fields are set, or
+// neither: with neither, pogfarm runs without the bot.
+type Telegram struct {
+	// BotToken is the token BotFather issued for the bot.
+	BotToken Secret `yaml:"bot_token" env:"POGFARM_TELEGRAM_BOT_TOKEN"`
+	// OwnerChatID is the only chat the bot answers. Updates from any other
+	// chat are ignored.
+	OwnerChatID int64 `yaml:"owner_chat_id" env:"POGFARM_TELEGRAM_OWNER_CHAT_ID"`
+}
+
+// Enabled reports whether the bot is configured.
+func (t Telegram) Enabled() bool {
+	return t.BotToken.IsSet() && t.OwnerChatID != 0
 }
 
 // Clipper is the configuration of the render service.
@@ -154,6 +171,7 @@ func (c *Pogfarm) validate() []string {
 	}
 	problems = append(problems, checkSecret("pogfarm.api_secret", "POGFARM_API_SECRET", c.APISecret)...)
 	problems = append(problems, c.Twitch.validate()...)
+	problems = append(problems, c.Telegram.validate()...)
 	return problems
 }
 
@@ -181,6 +199,28 @@ func (c *Twitch) validate() []string {
 	case !c.ClientSecret.IsSet() && c.ClientID != "":
 		problems = append(problems, fmt.Sprintf(
 			"%s is required when %s is set: set %s, or %s_FILE to a file containing it", secretKey, idKey, secretEnv, secretEnv))
+	}
+	return problems
+}
+
+// validate never puts the token in a message.
+func (t Telegram) validate() []string {
+	const (
+		tokenKey, tokenEnv = "pogfarm.telegram.bot_token", "POGFARM_TELEGRAM_BOT_TOKEN"
+		ownerKey, ownerEnv = "pogfarm.telegram.owner_chat_id", "POGFARM_TELEGRAM_OWNER_CHAT_ID"
+	)
+	var problems []string
+	switch {
+	case t.BotToken.Reveal() == SecretPlaceholder:
+		problems = append(problems, fmt.Sprintf(
+			"%s is still the example placeholder: set %s, or %s_FILE, to the token from BotFather", tokenKey, tokenEnv, tokenEnv))
+	case !t.BotToken.IsSet() && t.OwnerChatID != 0:
+		problems = append(problems, fmt.Sprintf(
+			"%s is required when %s is set: set %s, or %s_FILE to a file containing it", tokenKey, ownerKey, tokenEnv, tokenEnv))
+	}
+	if t.BotToken.IsSet() && t.OwnerChatID == 0 {
+		problems = append(problems, fmt.Sprintf(
+			"%s (%s) is required when %s is set: the id of the only chat the bot answers", ownerKey, ownerEnv, tokenKey))
 	}
 	return problems
 }

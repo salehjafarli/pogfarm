@@ -44,6 +44,18 @@ pogfarm:
     # Env: POGFARM_TWITCH_CLIENT_SECRET or POGFARM_TWITCH_CLIENT_SECRET_FILE.
     client_secret: "change-me"
 
+  # Telegram bot the owner reviews clips through. Optional: with neither key
+  # set, pogfarm runs without the bot. Setting only one of them is an error.
+  # telegram:
+  #   # Token that BotFather issued for the bot. A secret.
+  #   # Env: POGFARM_TELEGRAM_BOT_TOKEN or POGFARM_TELEGRAM_BOT_TOKEN_FILE.
+  #   bot_token: "change-me"
+  #
+  #   # Id of the only chat the bot answers; everyone else is ignored. For a
+  #   # private chat this is the owner's numeric Telegram user id.
+  #   # Env: POGFARM_TELEGRAM_OWNER_CHAT_ID.
+  #   owner_chat_id: 123456789
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.
