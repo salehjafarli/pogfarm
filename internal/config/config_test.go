@@ -25,6 +25,7 @@ const (
 var allEnv = []string{
 	EnvConfigPath,
 	"POGFARM_LISTEN_ADDR", "POGFARM_DATA_DIR", "POGFARM_API_SECRET", "POGFARM_API_SECRET_FILE",
+	"POGFARM_TELEGRAM_BOT_TOKEN", "POGFARM_TELEGRAM_BOT_TOKEN_FILE", "POGFARM_TELEGRAM_OWNER_CHAT_ID",
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
 }
 
@@ -473,4 +474,127 @@ func TestApplyEnvScalarTypes(t *testing.T) {
 			t.Errorf("a bad value should not change the field: %+v", s)
 		}
 	})
+}
+
+const goodBotToken = "123456789:AAbbCCddEEffGGhhIIjjKKllMMnnOOppQQ"
+
+func TestTelegramIsOffByDefault(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Telegram.Enabled() {
+		t.Error("the bot must be off when nothing is configured")
+	}
+}
+
+func TestTelegramFromFile(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  api_secret: `+goodSecret+`
+  telegram:
+    bot_token: "`+goodBotToken+`"
+    owner_chat_id: 4242
+`)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Telegram.Enabled() || cfg.Telegram.BotToken.Reveal() != goodBotToken || cfg.Telegram.OwnerChatID != 4242 {
+		t.Errorf("telegram settings not loaded: enabled=%v owner=%d", cfg.Telegram.Enabled(), cfg.Telegram.OwnerChatID)
+	}
+}
+
+func TestTelegramFromEnvAndSecretFile(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  telegram:
+    bot_token: "from-the-file-and-overridden"
+    owner_chat_id: 1
+`)
+	t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN_FILE", writeFile(t, "token", goodBotToken+"\n"))
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "-1001234567890")
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Telegram.BotToken.Reveal() != goodBotToken {
+		t.Error("token not taken from the secret file")
+	}
+	if cfg.Telegram.OwnerChatID != -1001234567890 {
+		t.Errorf("owner chat id not taken from the environment: %d", cfg.Telegram.OwnerChatID)
+	}
+
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "me")
+	_, err = LoadPogfarm(path)
+	if got := strings.Join(problemsOf(t, err), "\n"); !strings.Contains(got, "POGFARM_TELEGRAM_OWNER_CHAT_ID: not a whole number") {
+		t.Errorf("unexpected problems: %s", got)
+	}
+}
+
+func TestTelegramValidation(t *testing.T) {
+	cases := []struct {
+		name, token, owner, want string
+	}{
+		{"token without owner", goodBotToken, "", "pogfarm.telegram.owner_chat_id (POGFARM_TELEGRAM_OWNER_CHAT_ID) is required"},
+		{"owner without token", "", "4242", "pogfarm.telegram.bot_token is required"},
+		{"placeholder token", SecretPlaceholder, "4242", "pogfarm.telegram.bot_token is still the example placeholder"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanEnv(t)
+			t.Setenv("POGFARM_API_SECRET", goodSecret)
+			t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN", tc.token)
+			t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", tc.owner)
+
+			_, err := LoadPogfarm("")
+			got := problemsOf(t, err)
+			if len(got) != 1 || !strings.Contains(got[0], tc.want) {
+				t.Errorf("want one problem containing %q, got %v", tc.want, got)
+			}
+			if tc.token != "" && tc.token != SecretPlaceholder && strings.Contains(err.Error(), tc.token) {
+				t.Errorf("validation message leaks the token: %v", err)
+			}
+		})
+	}
+}
+
+func TestTelegramTokenIsNeverPrinted(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("POGFARM_TELEGRAM_BOT_TOKEN", goodBotToken)
+	t.Setenv("POGFARM_TELEGRAM_OWNER_CHAT_ID", "4242")
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var log bytes.Buffer
+	slog.New(slog.NewTextHandler(&log, nil)).Info("loaded", "config", cfg, "telegram", cfg.Telegram)
+	j, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, out := range map[string]string{
+		"String": cfg.String(),
+		"%+v":    fmt.Sprintf("%+v %+v", cfg, cfg.Telegram),
+		"%#v":    fmt.Sprintf("%#v", cfg.Telegram),
+		"slog":   log.String(),
+		"json":   string(j),
+	} {
+		if strings.Contains(out, goodBotToken) {
+			t.Errorf("%s leaks the bot token: %s", name, out)
+		}
+	}
+	if !strings.Contains(cfg.String(), "owner_chat_id: 4242") {
+		t.Errorf("String should still show the owner chat id, got:\n%s", cfg.String())
+	}
 }
