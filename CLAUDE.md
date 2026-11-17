@@ -55,8 +55,10 @@ internal/pogfarm/lock/       the data-directory lock that keeps pogfarm to one i
 internal/pogfarm/source/     platform interface (VODs, chat, viewer clips) and registry; sourcetest has fakes
 internal/pogfarm/source/twitch/  Twitch: Helix client and token, VOD listing, chat via TwitchDownloaderCLI, clips
 internal/pogfarm/scan/       discovery loop, spike detection, candidate builder, scanner loop
-internal/pogfarm/review/     Telegram Bot API client, bot (owner-only routing), review sender
-internal/pogfarm/upload/     uploader loop and target platforms (in progress)
+internal/pogfarm/review/     Telegram: Bot API client, bot (owner-only routing), review sender, Approve/Reject/Undo,
+                             /status and /pending, title override by reply
+internal/pogfarm/status/     read-only farm statistics behind /status and /pending
+internal/pogfarm/upload/     uploader loop, Target interface, post text (title, description, tags); no real target yet
 internal/clipper/            worker, download, layout, transcribe, caption, render (not built yet)
 deploy/                      Dockerfiles and compose files (not built yet)
 docs/                        architecture and job contract
