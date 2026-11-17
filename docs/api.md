@@ -10,7 +10,7 @@ This is the only interface between pogfarm and clipper. The Go types live in `in
 - **Times** are RFC 3339 in UTC, for example `2026-11-17T14:32:00Z`.
 - **Durations and offsets** are numbers of seconds. Fields that may be fractional say so.
 - **Unknown JSON fields** are ignored by both sides, so fields can be added without breaking older binaries.
-- **Authentication:** every `/v1` route requires the shared secret. A request without a valid one gets `401` with code `unauthenticated`. How the secret is presented is specified with the authentication implementation.
+- **Authentication:** every `/v1` route requires the shared secret. A request without a valid one gets `401` with code `unauthenticated`. See [Authentication](#authentication).
 
 | Operation | Route | Purpose |
 |---|---|---|
@@ -18,6 +18,33 @@ This is the only interface between pogfarm and clipper. The Go types live in `in
 | Heartbeat | `POST /v1/jobs/{id}/heartbeat` | Keep the lease on a job |
 | Complete | `POST /v1/jobs/{id}/complete` | Upload the finished clip |
 | Fail | `POST /v1/jobs/{id}/fail` | Report that the job could not be done |
+
+## Authentication
+
+pogfarm and every clipper are configured with the same shared secret (`pogfarm.api_secret` and `clipper.api_secret`). Only a clipper that knows it may claim jobs or upload results.
+
+The clipper sends the secret on every request in the standard header:
+
+```
+Authorization: Bearer <secret>
+```
+
+- The scheme name `Bearer` is matched without regard to case, followed by exactly one space. The secret is compared exactly as sent: it is case-sensitive and nothing is trimmed.
+- pogfarm checks the header on **every route under `/v1`**, before routing and before reading the body, so an unknown `/v1` path without the secret also gets `401`, not `404`.
+- The comparison takes the same time whatever was sent, so response timing reveals nothing about the secret.
+- A request with no header, another scheme, an empty secret or the wrong secret gets `401` with the header `WWW-Authenticate: Bearer` and the usual error body. The response is the same in all of these cases:
+
+```json
+{ "error": { "code": "unauthenticated", "message": "missing or wrong shared secret" } }
+```
+
+- A clipper that receives `unauthenticated` is misconfigured. Retrying with the same secret cannot succeed.
+- Routes outside `/v1`, such as a health endpoint, need no secret.
+- Neither side logs the secret or includes it in an error message.
+
+In Go, `api.RequireSecret` is the server middleware and `api.BearerTransport` is the `http.RoundTripper` a clipper builds its HTTP client on.
+
+**Expose the API only on a trusted network or behind TLS.** The secret is a bearer credential: over plain HTTP it crosses the wire in clear text, and anyone who can read the traffic can copy it and act as a clipper. Run pogfarm and its clippers on a private network (for example an overlay network or a VPN), or put the API behind TLS and give clippers an `https` URL. Never publish the plain HTTP port to the internet.
 
 ## The job
 
