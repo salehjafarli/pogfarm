@@ -1,0 +1,106 @@
+#!/opt/venv/bin/python
+"""Find faces in still images with OpenCV's YuNet detector.
+
+This is the face detector of the clipper base image. The clipper's webcam
+detection (internal/clipper/detect) runs it as a subprocess on a few frames
+taken from a clip.
+
+Usage:
+
+    detect-faces [--model PATH] [--min-confidence 0.6] [--max-side 1280] IMAGE...
+
+Output (stdout, one JSON document):
+
+    {
+      "detector": "yunet",
+      "model": "/models/yunet/face_detection_yunet_2023mar.onnx",
+      "images": [
+        {
+          "path": "frame-1.jpg",
+          "width": 1280,
+          "height": 720,
+          "faces": [
+            {"x": 151.2, "y": 499.8, "w": 36.5, "h": 46.1, "confidence": 0.93}
+          ],
+          "error": null
+        }
+      ]
+    }
+
+Boxes are in pixels of the original image: x and y are the top-left corner.
+Faces are sorted by confidence, highest first. An image that cannot be read
+gets an "error" message and no faces; the other images are still processed.
+
+Exit status: 0 when every image was read, 1 when at least one could not be
+read, 2 for bad arguments or a model that cannot be loaded.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+import cv2
+
+DEFAULT_MODEL = os.environ.get(
+    "POGFARM_YUNET_MODEL", "/models/yunet/face_detection_yunet_2023mar.onnx"
+)
+
+
+def detect(detector, path, min_confidence, max_side):
+    image = cv2.imread(path, cv2.IMREAD_COLOR)
+    if image is None:
+        return {"path": path, "width": 0, "height": 0, "faces": [], "error": "cannot read image"}
+    height, width = image.shape[:2]
+
+    # YuNet works on the image at its own size. Large frames are scaled down
+    # first, which keeps the run time small; boxes are scaled back up.
+    scale = 1.0
+    if max_side > 0 and max(width, height) > max_side:
+        scale = max_side / max(width, height)
+        image = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
+
+    detector.setInputSize((image.shape[1], image.shape[0]))
+    _, found = detector.detect(image)
+    faces = []
+    for row in found if found is not None else []:
+        # Each row: x, y, w, h, five landmark points (x, y), score.
+        confidence = float(row[14])
+        if confidence < min_confidence:
+            continue  # the model's own threshold already does this; kept as a guard
+        x, y, w, h = (float(v) / scale for v in row[:4])
+        faces.append({
+            "x": round(x, 1),
+            "y": round(y, 1),
+            "w": round(w, 1),
+            "h": round(h, 1),
+            "confidence": round(confidence, 4),
+        })
+    faces.sort(key=lambda f: f["confidence"], reverse=True)
+    return {"path": path, "width": width, "height": height, "faces": faces, "error": None}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Find faces in images with YuNet and print JSON.")
+    parser.add_argument("images", nargs="+", metavar="IMAGE")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="YuNet ONNX model (default: %(default)s)")
+    parser.add_argument("--min-confidence", type=float, default=0.6, help="drop faces below this score (default: %(default)s)")
+    parser.add_argument("--max-side", type=int, default=1280, help="scale larger images down to this size first; 0 keeps the size (default: %(default)s)")
+    args = parser.parse_args()
+
+    try:
+        # Arguments: model, config, input size (reset per image), score
+        # threshold, non-maximum suppression threshold, top k.
+        detector = cv2.FaceDetectorYN.create(args.model, "", (320, 320), args.min_confidence, 0.3, 5000)
+    except cv2.error as err:
+        print(f"detect-faces: cannot load model {args.model}: {err}", file=sys.stderr)
+        return 2
+
+    results = [detect(detector, path, args.min_confidence, args.max_side) for path in args.images]
+    json.dump({"detector": "yunet", "model": args.model, "images": results}, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 1 if any(r["error"] for r in results) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

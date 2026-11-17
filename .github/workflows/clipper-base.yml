@@ -1,0 +1,91 @@
+name: clipper-base
+
+# Builds the clipper base image natively on each architecture and runs its
+# smoke test with networking disabled. Nothing is pushed to a registry;
+# publishing is a separate workflow. This workflow is not a required check.
+on:
+  pull_request:
+    paths:
+      - deploy/clipper-base.Dockerfile
+      - deploy/clipper-base/**
+      - .github/workflows/clipper-base.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clipper-base-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      IMAGE: pogfarm-clipper-base:test
+    steps:
+      - uses: actions/checkout@v7
+
+      # The image and its build layers take several gigabytes.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup || true
+          sudo docker image prune --all --force > /dev/null
+          df -h /
+
+      # The runner's own Docker daemon (BuildKit, "docker" driver) builds for
+      # its native platform and keeps the result, so no export step is needed.
+      - name: Build
+        run: |
+          start=$(date +%s)
+          docker buildx build --platform linux/${{ matrix.arch }} \
+            -f deploy/clipper-base.Dockerfile -t "$IMAGE" --load --progress plain .
+          seconds=$(( $(date +%s) - start ))
+          echo "BUILD_SECONDS=$seconds" >> "$GITHUB_ENV"
+          echo "build took ${seconds}s"
+
+      - name: Image size
+        run: |
+          bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE")
+          echo "IMAGE_BYTES=$bytes" >> "$GITHUB_ENV"
+          echo "docker image inspect size: $bytes bytes"
+          docker images "$IMAGE"
+          docker image inspect --format '{{.Os}}/{{.Architecture}} user={{.Config.User}}' "$IMAGE"
+          docker history --format 'table {{.Size}}\t{{.CreatedBy}}' --no-trunc "$IMAGE" | cut -c1-160
+
+      - name: Smoke test (no network)
+        run: |
+          set -o pipefail
+          docker run --rm --network none \
+            -v "$PWD/deploy/clipper-base/test:/test:ro" \
+            "$IMAGE" bash /test/run-tests.sh 2>&1 | tee test.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### clipper-base ${{ matrix.arch }}"
+            echo
+            echo "- runner: ${{ matrix.runner }}"
+            echo "- build time: ${BUILD_SECONDS:-n/a}s"
+            if [ -n "${IMAGE_BYTES:-}" ]; then
+              echo "- image size: ${IMAGE_BYTES} bytes ($(numfmt --to=si --suffix=B "$IMAGE_BYTES"))"
+            fi
+            if [ -f test.log ]; then
+              echo
+              echo '```'
+              cat test.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
