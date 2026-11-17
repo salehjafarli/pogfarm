@@ -71,6 +71,8 @@ type Pogfarm struct {
 	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
 	Telegram Telegram `yaml:"telegram"`
+	// Review configures the approve and reject buttons. See review.go.
+	Review Review `yaml:"review"`
 
 	// TwitchDownloaderPath is the TwitchDownloaderCLI program used to
 	// download the chat of a Twitch VOD: a path, or a name looked up in
@@ -205,6 +207,7 @@ func defaults() file {
 				RejectedRetention: 24 * time.Hour,
 				PostedRetention:   7 * 24 * time.Hour,
 			},
+			Review: defaultReview(),
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 
@@ -311,6 +314,7 @@ func (c *Pogfarm) validate() []string {
 	problems = append(problems, c.Cleanup.validate()...)
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
+	problems = append(problems, c.Review.validate()...)
 
 	if c.TwitchDownloaderPath == "" {
 		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")

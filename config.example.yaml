@@ -100,6 +100,14 @@ pogfarm:
   #   # Env: POGFARM_TELEGRAM_OWNER_CHAT_ID.
   #   owner_chat_id: 123456789
 
+  # Approve and Reject buttons of the review messages.
+  review:
+    # How long after a decision the Undo button works, as long as no upload
+    # of the clip has started. At most "1h", the shortest rejected_retention,
+    # so a rejected clip's file is never deleted while it can still be undone.
+    # Env: POGFARM_REVIEW_UNDO_WINDOW. Default "5m".
+    undo_window: "5m"
+
   # TwitchDownloaderCLI program used to download the chat of a Twitch VOD:
   # a path, or a name looked up in PATH.
   # Env: POGFARM_TWITCH_DOWNLOADER_PATH. Default "TwitchDownloaderCLI".
