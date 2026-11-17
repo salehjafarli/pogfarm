@@ -34,6 +34,9 @@ tmp=$(mktemp "$dir/.jfk.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 curl -fsSL --retry 5 --retry-all-errors -o "$tmp" "$url"
 check "$tmp" || { echo "jfk.mp3: checksum mismatch" >&2; exit 1; }
+# mktemp creates the file readable by its owner only; the test runs as
+# another user inside the container.
+chmod 0644 "$tmp"
 mv "$tmp" "$out"
 trap - EXIT
 echo "fetched jfk.mp3"
