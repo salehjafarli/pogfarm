@@ -1,0 +1,52 @@
+# Python environment of the clipper base image (deploy/clipper-base.Dockerfile).
+# It is not a package; it only exists to produce uv.lock, the pinned and hashed
+# set of wheels installed into /opt/venv. To change a version, edit this file,
+# run `uv lock` in this directory, and commit both files.
+[project]
+name = "pogfarm-clipper-base"
+version = "0"
+requires-python = "==3.13.*"
+dependencies = [
+    "whisperx==3.8.6",
+    # CPU-only PyTorch from the PyTorch CPU index (see [tool.uv.sources]).
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    # Face detector for webcam detection (YuNet through cv2.FaceDetectorYN).
+    "opencv-python-headless==4.14.0.94",
+]
+
+[tool.uv]
+package = false
+# The image is only built for these two platforms (Debian trixie, glibc 2.41).
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+# Packages left out on purpose (an override with a marker that never matches
+# removes a dependency):
+# - triton: whisperx lists it for linux/x86_64. It is a GPU kernel compiler
+#   and is never used on CPU.
+# - torchcodec: pyannote.audio uses it only to decode audio files itself.
+#   whisperx hands pyannote an in-memory waveform (it decodes with the ffmpeg
+#   program), so it is not needed, and there is no linux/aarch64 wheel built
+#   for torch 2.8. Without it pyannote prints a warning at import; that is
+#   expected. Leaving it out on both architectures keeps them identical.
+override-dependencies = [
+    "triton; sys_platform == 'never'",
+    "torchcodec; sys_platform == 'never'",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
