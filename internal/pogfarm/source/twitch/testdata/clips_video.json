@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "2001",
+      "stream_id": "40977987543",
+      "user_id": "141981764",
+      "user_login": "examplestreamer",
+      "user_name": "ExampleStreamer",
+      "title": "ranked grind",
+      "description": "",
+      "created_at": "2026-11-10T18:00:00Z",
+      "published_at": "2026-11-10T18:00:00Z",
+      "url": "https://www.twitch.tv/videos/2001",
+      "thumbnail_url": "https://static-cdn.jtvnw.net/cf_vods/example/thumb/thumb0-%{width}x%{height}.jpg",
+      "viewable": "public",
+      "view_count": 1863,
+      "language": "en",
+      "type": "archive",
+      "duration": "3h0m0s",
+      "muted_segments": null
+    }
+  ],
+  "pagination": {}
+}
