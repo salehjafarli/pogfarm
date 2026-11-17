@@ -36,6 +36,8 @@ var allEnv = []string{
 	// Scanner and discovery loops (scan_test.go).
 	"POGFARM_DISCOVERY_INTERVAL", "POGFARM_SCAN_INTERVAL", "POGFARM_SCAN_WORKERS",
 	"POGFARM_SCAN_MAX_ATTEMPTS", "POGFARM_SCAN_RETRY_BACKOFF", "POGFARM_SCAN_MAX_RETRY_BACKOFF",
+	// Review decisions (review_test.go).
+	"POGFARM_REVIEW_UNDO_WINDOW",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
