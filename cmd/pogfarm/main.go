@@ -18,7 +18,10 @@ import (
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/lock"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/queue"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/review"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/scan"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/server"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/source"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/source/twitch"
 	"github.com/salehjafarli/pogfarm/internal/pogfarm/store"
 )
 
@@ -66,6 +69,13 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 		return err
 	}
 	defer func() { err = errors.Join(err, dirLock.Release()) }()
+
+	// Stream platforms, built before the data directory is used so that
+	// bad platform settings fail startup early.
+	sources, err := newSources(cfg)
+	if err != nil {
+		return err
+	}
 
 	// Core: the store and the queue, opened once and shared by every loop
 	// and handler. The store is closed only after every loop has stopped.
@@ -118,9 +128,58 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 		}
 	})
 
+	// Discovery and scanning: find new VODs of allowlisted streamers and
+	// turn their chat into render jobs. Off without Twitch credentials.
+	startScanning(ctx, cfg, st, q, sources, logger, &loops)
+
 	<-ctx.Done()
 	loops.Wait()
 	return errors.Join(serveErr, reaperErr)
+}
+
+// newSources builds the registry of stream platforms from the
+// configuration. It is nil when no platform is configured, which turns
+// discovery and scanning off.
+func newSources(cfg *config.Pogfarm) (*source.Registry, error) {
+	if cfg.Twitch.ClientID == "" || !cfg.Twitch.ClientSecret.IsSet() {
+		return nil, nil
+	}
+	tw, err := twitch.NewSourceFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return source.NewRegistry(tw)
+}
+
+// startScanning starts the discovery and scanner loops on loops, sharing the
+// store and queue with the rest of the service. With no sources both loops
+// stay off.
+func startScanning(ctx context.Context, cfg *config.Pogfarm, st *store.Store, q *queue.Queue, sources *source.Registry, logger *slog.Logger, loops *sync.WaitGroup) {
+	if sources == nil {
+		logger.Warn("discovery and scanning are off: pogfarm.twitch is not configured")
+		return
+	}
+	discoverer := &scan.Discoverer{
+		Store:     st,
+		Sources:   sources,
+		Allowlist: cfg.Streamers,
+		MaxVODAge: cfg.Discovery.MaxVODAge,
+		Interval:  cfg.Discovery.Interval,
+		Logger:    logger.With("loop", "discovery"),
+	}
+	scanner := scan.NewScanner(st, q, sources, cfg.Scan, logger.With("loop", "scanner"))
+	loops.Go(func() {
+		if err := discoverer.Run(ctx); err != nil {
+			logger.Error("discovery loop stopped", "error", err)
+		}
+	})
+	loops.Go(func() {
+		if err := scanner.Run(ctx); err != nil {
+			logger.Error("scanner loop stopped", "error", err)
+		}
+	})
+	logger.Info("discovery and scanner started", "streamers", len(cfg.Streamers),
+		"discovery_interval", cfg.Discovery.Interval, "scan_workers", cfg.Scan.Workers)
 }
 
 // openCore opens the database in the data directory and builds the job

@@ -114,3 +114,36 @@ func ViewerClips(ctx context.Context, s Source, vod VOD) ([]ViewerClip, error) {
 	}
 	return l.ViewerClips(ctx, vod)
 }
+
+// ErrLookupUnsupported is returned by LookupStreamer when the source does not
+// implement StreamerLookup.
+var ErrLookupUnsupported = errors.New("source: streamer lookup not supported")
+
+// Account is a streamer's account on a platform.
+type Account struct {
+	// ID is the platform's permanent identifier of the account, which
+	// stays the same when the login changes.
+	ID string
+	// Streamer is the account's login and display name as the platform
+	// has them now.
+	Streamer api.Streamer
+}
+
+// StreamerLookup is the optional capability of a Source to resolve a login
+// to the account, whether or not the streamer has any VODs. Use
+// LookupStreamer to call it on any Source.
+type StreamerLookup interface {
+	// LookupStreamer returns the account with the given login. The error
+	// wraps ErrStreamerNotFound when the platform has no such account.
+	LookupStreamer(ctx context.Context, login string) (Account, error)
+}
+
+// LookupStreamer resolves a login to the account if s can, and returns
+// ErrLookupUnsupported otherwise.
+func LookupStreamer(ctx context.Context, s Source, login string) (Account, error) {
+	l, ok := s.(StreamerLookup)
+	if !ok {
+		return Account{}, ErrLookupUnsupported
+	}
+	return l.LookupStreamer(ctx, login)
+}

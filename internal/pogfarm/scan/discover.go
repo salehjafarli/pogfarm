@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -18,8 +19,8 @@ import (
 // them in the store for the scanner. It never looks at a streamer that is not
 // on the allowlist or is switched off there.
 //
-// Discover runs one pass. Running passes at an interval is the caller's job.
-// One Discoverer must not run two passes at the same time.
+// Discover runs one pass, and Run runs passes at an interval. One Discoverer
+// must not run two passes at the same time.
 type Discoverer struct {
 	// Store is where streamers and VODs are recorded. Required.
 	Store *store.Store
@@ -31,6 +32,11 @@ type Discoverer struct {
 	// MaxVODAge is how long after its start a VOD is still recorded. Zero
 	// means any age.
 	MaxVODAge time.Duration
+	// Interval is the time between two passes of Run. Zero means
+	// DefaultDiscoveryInterval.
+	Interval time.Duration
+	// Logger receives what Run does. Nil discards it.
+	Logger *slog.Logger
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
 }
@@ -87,7 +93,7 @@ func (f DiscoverFailure) Unwrap() error { return f.Err }
 // that point.
 //
 // A streamer is stored the first time the platform lists a VOD for them, live
-// or old ones included, because that is when their permanent id is known.
+// or old ones included, unless SyncStreamers stored them before.
 func (d *Discoverer) Discover(ctx context.Context) (DiscoverResult, error) {
 	var res DiscoverResult
 	if d.Store == nil || d.Sources == nil {
@@ -151,7 +157,7 @@ func (d *Discoverer) discoverStreamer(ctx context.Context, entry config.Streamer
 		}
 	}
 
-	streamer, err := d.upsertStreamer(ctx, entry, vods[0])
+	streamer, err := d.upsertStreamer(ctx, entry, vods[0].StreamerID, vods[0].Streamer.DisplayName)
 	if err != nil {
 		return &discoverStoreError{err}
 	}
@@ -212,24 +218,24 @@ func checkDiscovered(v source.VOD, platform api.Platform, streamerID string) err
 	return nil
 }
 
-// upsertStreamer stores the streamer of a listed VOD as enabled, or brings
-// the stored row up to date. The insert goes first and the store's
+// upsertStreamer stores the streamer with the given platform user id as
+// enabled, or brings the stored row up to date. The insert goes first and the store's
 // uniqueness of (platform, platform user id) tells whether the row existed.
 // The stored login is the allowlist's, which is what syncAllowlist compares
 // with; a streamer who was renamed keeps their row and gets the new login.
-func (d *Discoverer) upsertStreamer(ctx context.Context, entry config.Streamer, v source.VOD) (store.Streamer, error) {
+func (d *Discoverer) upsertStreamer(ctx context.Context, entry config.Streamer, platformUserID, displayName string) (store.Streamer, error) {
 	want := store.Streamer{
 		Platform:       entry.Platform,
-		PlatformUserID: v.StreamerID,
+		PlatformUserID: platformUserID,
 		Login:          entry.Login,
-		DisplayName:    v.Streamer.DisplayName,
+		DisplayName:    displayName,
 		Enabled:        true,
 	}
 	row, err := store.InsertStreamer(ctx, d.Store.Writer(), want)
 	if !errors.Is(err, store.ErrDuplicate) {
 		return row, err
 	}
-	row, err = store.GetStreamerByPlatformID(ctx, d.Store.Writer(), entry.Platform, v.StreamerID)
+	row, err = store.GetStreamerByPlatformID(ctx, d.Store.Writer(), entry.Platform, platformUserID)
 	if err != nil {
 		return row, err
 	}
@@ -242,7 +248,8 @@ func (d *Discoverer) upsertStreamer(ctx context.Context, entry config.Streamer, 
 
 // syncAllowlist switches off every stored streamer that is not an enabled
 // allowlist entry, and returns how many it switched off. Enabled entries are
-// stored, and switched back on, when their VODs are listed.
+// stored, and switched back on, by SyncStreamers and when their VODs are
+// listed.
 func (d *Discoverer) syncAllowlist(ctx context.Context) (int, error) {
 	rows, err := d.Store.Reader().QueryContext(ctx, `SELECT id, platform, login FROM streamers WHERE enabled = 1`)
 	if err != nil {

@@ -347,3 +347,46 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("recorded %d calls, want 24", got)
 	}
 }
+
+func TestLookupStreamer(t *testing.T) {
+	ctx := context.Background()
+	f := New(platform)
+
+	if _, err := f.LookupStreamer(ctx, "nobody"); !errors.Is(err, source.ErrStreamerNotFound) {
+		t.Errorf("unknown login: err = %v, want ErrStreamerNotFound", err)
+	}
+
+	// Known from VODs: the newest one that carries the account id wins.
+	older := vod("v1", "one", day, true)
+	older.StreamerID = "id-old"
+	newer := vod("v2", "one", day.Add(time.Hour), true)
+	newer.StreamerID = "id-one"
+	newer.Streamer.DisplayName = "One Now"
+	f.AddVOD(newer)
+	f.AddVOD(older)
+	f.AddVOD(vod("v3", "one", day.Add(2*time.Hour), true)) // no account id
+	got, err := f.LookupStreamer(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := source.Account{ID: "id-one", Streamer: api.Streamer{Login: "one", DisplayName: "One Now"}}
+	if got != want {
+		t.Errorf("from VODs: got %+v, want %+v", got, want)
+	}
+
+	// An added account needs no VODs and wins over them.
+	acct := source.Account{ID: "id-two", Streamer: api.Streamer{Login: "two", DisplayName: "Two"}}
+	f.AddAccount(acct)
+	if got, err := f.LookupStreamer(ctx, "two"); err != nil || got != acct {
+		t.Errorf("added account: got %+v, %v; want %+v", got, err, acct)
+	}
+
+	boom := errors.New("boom")
+	f.SetError(boom)
+	if _, err := f.LookupStreamer(ctx, "two"); !errors.Is(err, boom) {
+		t.Errorf("with SetError: err = %v, want boom", err)
+	}
+	if calls := f.Calls(); len(calls) != 4 || calls[3] != (Call{Method: "LookupStreamer", Arg: "two"}) {
+		t.Errorf("calls: %+v", calls)
+	}
+}

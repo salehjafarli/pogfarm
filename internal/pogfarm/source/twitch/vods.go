@@ -149,6 +149,23 @@ func (l *VODLister) recentVODs(ctx context.Context, login string) ([]source.VOD,
 	return vods, nil
 }
 
+// LookupStreamer resolves a login to the Twitch account, whether or not it has
+// any VODs. It makes one request. The error wraps source.ErrStreamerNotFound
+// when Twitch has no account with that login.
+func (l *VODLister) LookupStreamer(ctx context.Context, login string) (source.Account, error) {
+	if login == "" {
+		return source.Account{}, errors.New("twitch: look up streamer: login is empty")
+	}
+	user, err := l.vodsUser(ctx, login)
+	if err != nil {
+		return source.Account{}, fmt.Errorf("twitch: look up streamer %q: %w", login, err)
+	}
+	return source.Account{
+		ID:       user.ID,
+		Streamer: api.Streamer{Login: user.Login, DisplayName: user.DisplayName},
+	}, nil
+}
+
 // vodsUser resolves a login to the account.
 func (l *VODLister) vodsUser(ctx context.Context, login string) (vodsUser, error) {
 	var users struct {
