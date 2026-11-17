@@ -1,0 +1,476 @@
+package config
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+)
+
+const (
+	goodSecret  = "correct-horse-battery-staple"
+	otherSecret = "another-long-enough-secret"
+)
+
+// allEnv lists every variable the loader reads, so tests start from a clean
+// slate whatever the developer's shell has set.
+var allEnv = []string{
+	EnvConfigPath,
+	"POGFARM_LISTEN_ADDR", "POGFARM_DATA_DIR", "POGFARM_API_SECRET", "POGFARM_API_SECRET_FILE",
+	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
+}
+
+// cleanEnv blanks every variable for the duration of the test. The loader
+// treats an empty variable as unset.
+func cleanEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range allEnv {
+		t.Setenv(name, "")
+	}
+}
+
+func writeFile(t *testing.T, name, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func problemsOf(t *testing.T, err error) []string {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *ValidationError, got %T: %v", err, err)
+	}
+	return ve.Problems
+}
+
+func TestPogfarmDefaultsWithEnvOnly(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ListenAddr != ":8080" || cfg.DataDir != "data" {
+		t.Errorf("defaults not applied: %+v", *cfg)
+	}
+	if cfg.APISecret.Reveal() != goodSecret {
+		t.Error("secret not taken from the environment")
+	}
+}
+
+func TestFileValuesAreLoaded(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  listen_addr: "127.0.0.1:9000"
+  data_dir: /var/lib/pogfarm
+  api_secret: `+goodSecret+`
+clipper:
+  pogfarm_url: https://farm.example/
+  scratch_dir: /tmp/clips
+  name: node-a
+  api_secret: `+goodSecret+`
+`)
+
+	p, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ListenAddr != "127.0.0.1:9000" || p.DataDir != "/var/lib/pogfarm" || p.APISecret.Reveal() != goodSecret {
+		t.Errorf("pogfarm section not loaded: %+v", *p)
+	}
+
+	c, err := LoadClipper(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.PogfarmURL != "https://farm.example" {
+		t.Errorf("trailing slash should be trimmed, got %q", c.PogfarmURL)
+	}
+	if c.ScratchDir != "/tmp/clips" || c.Name != "node-a" || c.APISecret.Reveal() != goodSecret {
+		t.Errorf("clipper section not loaded: %+v", *c)
+	}
+}
+
+func TestEnvOverridesFile(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  listen_addr: ":9000"
+  data_dir: from-file
+  api_secret: `+goodSecret+`
+`)
+	t.Setenv("POGFARM_DATA_DIR", "from-env")
+	t.Setenv("POGFARM_API_SECRET", otherSecret)
+
+	cfg, err := LoadPogfarm(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DataDir != "from-env" {
+		t.Errorf("env should override file: data_dir = %q", cfg.DataDir)
+	}
+	if cfg.APISecret.Reveal() != otherSecret {
+		t.Error("env should override a secret from the file")
+	}
+	if cfg.ListenAddr != ":9000" {
+		t.Errorf("file value without an env override should stay: listen_addr = %q", cfg.ListenAddr)
+	}
+}
+
+func TestSecretFromFile(t *testing.T) {
+	cleanEnv(t)
+	secretPath := writeFile(t, "api_secret", goodSecret+"\n")
+	cfgPath := writeFile(t, "config.yaml", "pogfarm:\n  api_secret: "+otherSecret+"\n")
+	t.Setenv("POGFARM_API_SECRET_FILE", secretPath)
+
+	cfg, err := LoadPogfarm(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APISecret.Reveal() != goodSecret {
+		t.Error("secret file should be used, without its trailing newline, and should override the config file")
+	}
+}
+
+func TestSecretFileProblems(t *testing.T) {
+	t.Run("both set", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET", goodSecret)
+		t.Setenv("POGFARM_API_SECRET_FILE", writeFile(t, "s", otherSecret))
+		_, err := LoadPogfarm("")
+		got := strings.Join(problemsOf(t, err), "\n")
+		if !strings.Contains(got, "POGFARM_API_SECRET and POGFARM_API_SECRET_FILE are both set") {
+			t.Errorf("unexpected problems: %s", got)
+		}
+	})
+	t.Run("missing file", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET_FILE", filepath.Join(t.TempDir(), "nope"))
+		_, err := LoadPogfarm("")
+		got := strings.Join(problemsOf(t, err), "\n")
+		if !strings.Contains(got, "POGFARM_API_SECRET_FILE: cannot read secret file") {
+			t.Errorf("unexpected problems: %s", got)
+		}
+	})
+	t.Run("empty file", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET_FILE", writeFile(t, "s", "\n"))
+		_, err := LoadPogfarm("")
+		got := strings.Join(problemsOf(t, err), "\n")
+		if !strings.Contains(got, "is empty") {
+			t.Errorf("unexpected problems: %s", got)
+		}
+	})
+}
+
+func TestConfigPathResolution(t *testing.T) {
+	fromEnv := writeFile(t, "env.yaml", "pogfarm:\n  data_dir: via-env-path\n")
+	explicit := writeFile(t, "flag.yaml", "pogfarm:\n  data_dir: via-flag-path\n")
+
+	t.Run("POGFARM_CONFIG is used when no path is given", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET", goodSecret)
+		t.Setenv(EnvConfigPath, fromEnv)
+		cfg, err := LoadPogfarm("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.DataDir != "via-env-path" {
+			t.Errorf("data_dir = %q", cfg.DataDir)
+		}
+	})
+	t.Run("explicit path wins over POGFARM_CONFIG", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET", goodSecret)
+		t.Setenv(EnvConfigPath, fromEnv)
+		cfg, err := LoadPogfarm(explicit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.DataDir != "via-flag-path" {
+			t.Errorf("data_dir = %q", cfg.DataDir)
+		}
+	})
+	t.Run("a named file that does not exist is an error", func(t *testing.T) {
+		cleanEnv(t)
+		t.Setenv("POGFARM_API_SECRET", goodSecret)
+		_, err := LoadPogfarm(filepath.Join(t.TempDir(), "missing.yaml"))
+		if err == nil || !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("want a not-exist error, got %v", err)
+		}
+	})
+}
+
+func TestUnknownKeyIsAnError(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	path := writeFile(t, "config.yaml", "pogfarm:\n  listen_adress: \":9000\"\n")
+	_, err := LoadPogfarm(path)
+	if err == nil || !strings.Contains(err.Error(), "listen_adress") {
+		t.Errorf("a misspelled key should be reported by name, got %v", err)
+	}
+}
+
+func TestEmptyFileIsAccepted(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	for _, content := range []string{"", "# only a comment\n"} {
+		if _, err := LoadPogfarm(writeFile(t, "config.yaml", content)); err != nil {
+			t.Errorf("content %q: %v", content, err)
+		}
+	}
+}
+
+func TestValidationListsEveryProblem(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  listen_addr: "no-port"
+  data_dir: ""
+clipper:
+  pogfarm_url: "ftp://farm"
+  scratch_dir: ""
+  name: "bad name!"
+  api_secret: short
+`)
+
+	_, err := LoadPogfarm(path)
+	pProblems := problemsOf(t, err)
+	if len(pProblems) != 3 {
+		t.Errorf("pogfarm: want 3 problems, got %d:\n%s", len(pProblems), strings.Join(pProblems, "\n"))
+	}
+	msg := err.Error()
+	for _, want := range []string{"3 problems", "pogfarm.listen_addr", "pogfarm.data_dir", "pogfarm.api_secret is required"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("pogfarm message lacks %q:\n%s", want, msg)
+		}
+	}
+
+	_, err = LoadClipper(path)
+	cProblems := problemsOf(t, err)
+	if len(cProblems) != 4 {
+		t.Errorf("clipper: want 4 problems, got %d:\n%s", len(cProblems), strings.Join(cProblems, "\n"))
+	}
+	msg = err.Error()
+	for _, want := range []string{"clipper.pogfarm_url", "clipper.api_secret", "too short", "clipper.scratch_dir", "clipper.name"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("clipper message lacks %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "short\n") || strings.Contains(msg, `"short"`) {
+		t.Errorf("validation message must not echo the secret:\n%s", msg)
+	}
+}
+
+func TestClipperRequiresURLAndDefaultsName(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("CLIPPER_API_SECRET", goodSecret)
+
+	_, err := LoadClipper("")
+	got := strings.Join(problemsOf(t, err), "\n")
+	if !strings.Contains(got, "clipper.pogfarm_url (CLIPPER_POGFARM_URL) is required") {
+		t.Errorf("unexpected problems: %s", got)
+	}
+
+	t.Setenv("CLIPPER_POGFARM_URL", "http://pogfarm:8080")
+	t.Setenv("CLIPPER_NAME", "")
+	cfg, err := LoadClipper("")
+	if err != nil {
+		// A hostname that is not a valid clipper name is reported, not hidden.
+		if !strings.Contains(err.Error(), "clipper.name") {
+			t.Fatal(err)
+		}
+		return
+	}
+	host, _ := os.Hostname()
+	if cfg.Name != host {
+		t.Errorf("name should default to the hostname %q, got %q", host, cfg.Name)
+	}
+	if cfg.ScratchDir != "scratch" {
+		t.Errorf("scratch_dir default not applied: %q", cfg.ScratchDir)
+	}
+}
+
+func TestExampleFileLoads(t *testing.T) {
+	cleanEnv(t)
+	example := filepath.Join("..", "..", "config.example.yaml")
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("CLIPPER_API_SECRET", goodSecret)
+	t.Setenv("CLIPPER_NAME", "example-node")
+
+	if _, err := LoadPogfarm(example); err != nil {
+		t.Errorf("pogfarm: %v", err)
+	}
+	if _, err := LoadClipper(example); err != nil {
+		t.Errorf("clipper: %v", err)
+	}
+}
+
+func TestExamplePlaceholderSecretIsRejected(t *testing.T) {
+	cleanEnv(t)
+	example := filepath.Join("..", "..", "config.example.yaml")
+	t.Setenv("CLIPPER_NAME", "example-node")
+
+	_, err := LoadPogfarm(example)
+	got := problemsOf(t, err)
+	if len(got) != 1 || !strings.Contains(got[0], "pogfarm.api_secret is still the example placeholder") {
+		t.Errorf("pogfarm: unexpected problems: %v", got)
+	}
+
+	_, err = LoadClipper(example)
+	got = problemsOf(t, err)
+	if len(got) != 1 || !strings.Contains(got[0], "clipper.api_secret is still the example placeholder") {
+		t.Errorf("clipper: unexpected problems: %v", got)
+	}
+}
+
+func TestSecretsAreNeverPrinted(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+	t.Setenv("CLIPPER_API_SECRET", goodSecret)
+	t.Setenv("CLIPPER_POGFARM_URL", "http://pogfarm:8080")
+	t.Setenv("CLIPPER_NAME", "node-a")
+
+	p, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadClipper("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputs := map[string]string{}
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%x", "%X", "%d"} {
+		outputs["pogfarm value "+verb] = fmt.Sprintf(verb, *p)
+		outputs["pogfarm pointer "+verb] = fmt.Sprintf(verb, p)
+		outputs["clipper value "+verb] = fmt.Sprintf(verb, *c)
+		outputs["secret "+verb] = fmt.Sprintf(verb, p.APISecret)
+		outputs["secret pointer "+verb] = fmt.Sprintf(verb, &p.APISecret)
+		outputs["secret in struct "+verb] = fmt.Sprintf(verb, struct{ S Secret }{p.APISecret})
+	}
+	outputs["pogfarm String"] = p.String()
+	outputs["clipper String"] = c.String()
+	outputs["secret String"] = p.APISecret.String()
+	outputs["print"] = fmt.Sprint(p, c, p.APISecret)
+
+	j, err := json.Marshal(struct {
+		P *Pogfarm
+		C *Clipper
+	}{p, c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs["json"] = string(j)
+
+	y, err := yaml.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs["yaml"] = string(y)
+
+	var text, jsonLog bytes.Buffer
+	slog.New(slog.NewTextHandler(&text, nil)).Info("loaded", "config", p, "secret", p.APISecret, "clipper", *c)
+	slog.New(slog.NewJSONHandler(&jsonLog, nil)).Info("loaded", "config", p, "secret", p.APISecret, "clipper", *c)
+	outputs["slog text"] = text.String()
+	outputs["slog json"] = jsonLog.String()
+
+	hexSecret := fmt.Sprintf("%x", goodSecret)
+	for name, out := range outputs {
+		if strings.Contains(out, goodSecret) || strings.Contains(strings.ToLower(out), hexSecret) {
+			t.Errorf("%s leaks the secret: %s", name, out)
+		}
+	}
+
+	if !strings.Contains(p.String(), "api_secret: '[redacted]'") && !strings.Contains(p.String(), `api_secret: "[redacted]"`) {
+		t.Errorf("String should show a redacted placeholder, got:\n%s", p.String())
+	}
+	if !strings.Contains(p.String(), "listen_addr") {
+		t.Errorf("String should still show ordinary settings, got:\n%s", p.String())
+	}
+	if got := (Secret{}).String(); got != "[not set]" {
+		t.Errorf("an empty secret should say so, got %q", got)
+	}
+}
+
+func TestSecretYAMLErrorDoesNotEchoContent(t *testing.T) {
+	cleanEnv(t)
+	path := writeFile(t, "config.yaml", "pogfarm:\n  api_secret: ["+goodSecret+"]\n")
+	_, err := LoadPogfarm(path)
+	if err == nil {
+		t.Fatal("a list is not a valid secret")
+	}
+	if strings.Contains(err.Error(), goodSecret) {
+		t.Errorf("parse error leaks the secret: %v", err)
+	}
+}
+
+func TestApplyEnvScalarTypes(t *testing.T) {
+	type nested struct {
+		Retries int `env:"T_RETRIES"`
+	}
+	type sample struct {
+		Name     string        `env:"T_NAME"`
+		Enabled  bool          `env:"T_ENABLED"`
+		Timeout  time.Duration `env:"T_TIMEOUT"`
+		Small    int8          `env:"T_SMALL"`
+		Token    Secret        `env:"T_TOKEN"`
+		FileOnly string
+		Nested   nested
+		hidden   string
+	}
+
+	t.Run("valid values", func(t *testing.T) {
+		t.Setenv("T_NAME", "x")
+		t.Setenv("T_ENABLED", "true")
+		t.Setenv("T_TIMEOUT", "90s")
+		t.Setenv("T_SMALL", "7")
+		t.Setenv("T_TOKEN", goodSecret)
+		t.Setenv("T_RETRIES", "5")
+
+		s := sample{FileOnly: "keep", hidden: "keep"}
+		if problems := applyEnv(&s); len(problems) != 0 {
+			t.Fatalf("unexpected problems: %v", problems)
+		}
+		if s.Name != "x" || !s.Enabled || s.Timeout != 90*time.Second || s.Small != 7 ||
+			s.Token.Reveal() != goodSecret || s.Nested.Retries != 5 || s.FileOnly != "keep" || s.hidden != "keep" {
+			t.Errorf("unexpected result: %+v", s)
+		}
+	})
+
+	t.Run("invalid values are all reported and leave fields alone", func(t *testing.T) {
+		t.Setenv("T_ENABLED", "maybe")
+		t.Setenv("T_TIMEOUT", "soon")
+		t.Setenv("T_SMALL", "999")
+		t.Setenv("T_RETRIES", "many")
+
+		s := sample{Enabled: true, Timeout: time.Minute}
+		problems := applyEnv(&s)
+		if len(problems) != 4 {
+			t.Fatalf("want 4 problems, got %d: %v", len(problems), problems)
+		}
+		joined := strings.Join(problems, "\n")
+		for _, want := range []string{"T_ENABLED", "T_TIMEOUT", "T_SMALL", "T_RETRIES"} {
+			if !strings.Contains(joined, want) {
+				t.Errorf("problems lack %s: %s", want, joined)
+			}
+		}
+		if !s.Enabled || s.Timeout != time.Minute {
+			t.Errorf("a bad value should not change the field: %+v", s)
+		}
+	})
+}
