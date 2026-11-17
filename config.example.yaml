@@ -81,6 +81,25 @@ pogfarm:
   # Env: POGFARM_TWITCH_DOWNLOADER_PATH. Default "TwitchDownloaderCLI".
   twitch_downloader_path: "TwitchDownloaderCLI"
 
+  # Allowlist: the only streamers pogfarm processes. It never discovers
+  # streamers by itself, so with no entries it finds no VODs. File only: this
+  # list has no environment variable.
+  # streamers:
+  #     # Platform the streamer is on. "twitch" is the only one today.
+  #   - platform: twitch
+  #     # Account name, as in the channel URL.
+  #     login: "some_streamer"
+  #     # Optional, default true. false keeps the entry but stops new VODs of
+  #     # the streamer from being recorded.
+  #     enabled: true
+
+  # How VODs of the allowlisted streamers are found.
+  discovery:
+    # A VOD that started longer ago than this is not recorded, because the
+    # platform deletes VODs after a retention period.
+    # Env: POGFARM_DISCOVERY_MAX_VOD_AGE. Default "72h".
+    max_vod_age: "72h"
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.

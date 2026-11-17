@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "141981764",
+      "login": "some_streamer",
+      "display_name": "Some_Streamer",
+      "type": "",
+      "broadcaster_type": "partner",
+      "description": "A made-up channel for tests.",
+      "profile_image_url": "https://static-cdn.example/profile.png",
+      "offline_image_url": "https://static-cdn.example/offline.png",
+      "view_count": 0,
+      "created_at": "2016-12-14T20:32:28Z"
+    }
+  ]
+}
