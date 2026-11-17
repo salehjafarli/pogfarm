@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "StartGGG",
+      "url": "https://clips.twitch.tv/StartGGG",
+      "embed_url": "https://clips.twitch.tv/embed?clip=StartGGG",
+      "broadcaster_id": "141981764",
+      "broadcaster_name": "ExampleStreamer",
+      "creator_id": "5007",
+      "creator_name": "viewer_5007",
+      "video_id": "2001",
+      "game_id": "33214",
+      "language": "en",
+      "title": "Stream starts",
+      "view_count": 3,
+      "created_at": "2026-11-10T18:01:05Z",
+      "thumbnail_url": "https://clips-media-assets2.twitch.tv/StartGGG-preview-480x272.jpg",
+      "duration": 60,
+      "vod_offset": 0,
+      "is_featured": false
+    },
+    {
+      "id": "LateHHH",
+      "url": "https://clips.twitch.tv/LateHHH",
+      "embed_url": "https://clips.twitch.tv/embed?clip=LateHHH",
+      "broadcaster_id": "141981764",
+      "broadcaster_name": "ExampleStreamer",
+      "creator_id": "5008",
+      "creator_name": "viewer_5008",
+      "video_id": "2001",
+      "game_id": "33214",
+      "language": "en",
+      "title": "Clipped from the VOD later",
+      "view_count": 12,
+      "created_at": "2026-11-11T09:12:00Z",
+      "thumbnail_url": "https://clips-media-assets2.twitch.tv/LateHHH-preview-480x272.jpg",
+      "duration": 18.75,
+      "vod_offset": 7300,
+      "is_featured": false
+    }
+  ],
+  "pagination": {}
+}

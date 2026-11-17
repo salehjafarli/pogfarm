@@ -18,6 +18,10 @@ import (
 // path when no path is given on the command line. Both binaries use it.
 const EnvConfigPath = "POGFARM_CONFIG"
 
+// MinLeaseDuration is the shortest job lease that is accepted. A clipper
+// sends several heartbeats per lease, so a shorter one could not be kept.
+const MinLeaseDuration = 10 * time.Second
+
 // MinSecretLength is the shortest shared API secret that is accepted.
 const MinSecretLength = 16
 
@@ -38,6 +42,8 @@ type Pogfarm struct {
 	// APISecret is the shared secret clippers present to the job API.
 	APISecret Secret `yaml:"api_secret" env:"POGFARM_API_SECRET"`
 
+	// Queue configures the job queue.
+	Queue Queue `yaml:"queue"`
 	// Twitch holds the credentials for the Twitch API.
 	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
@@ -79,6 +85,13 @@ type Discovery struct {
 	// VODs are skipped, because the platform deletes VODs after a retention
 	// period.
 	MaxVODAge time.Duration `yaml:"max_vod_age" env:"POGFARM_DISCOVERY_MAX_VOD_AGE"`
+}
+
+// Queue is the "queue" section of the main service's configuration.
+type Queue struct {
+	// LeaseDuration is how long a claimed job stays with its clipper unless
+	// a heartbeat extends the lease.
+	LeaseDuration time.Duration `yaml:"lease_duration" env:"POGFARM_QUEUE_LEASE_DURATION"`
 }
 
 // Twitch is the "twitch" section of the main service's configuration: the
@@ -132,6 +145,7 @@ func defaults() file {
 		Pogfarm: Pogfarm{
 			ListenAddr: ":8080",
 			DataDir:    "data",
+			Queue:      Queue{LeaseDuration: 2 * time.Minute},
 
 			TwitchDownloaderPath: "TwitchDownloaderCLI",
 
@@ -214,6 +228,11 @@ func (c *Pogfarm) validate() []string {
 		problems = append(problems, "pogfarm.data_dir (POGFARM_DATA_DIR) must not be empty")
 	}
 	problems = append(problems, checkSecret("pogfarm.api_secret", "POGFARM_API_SECRET", c.APISecret)...)
+	if c.Queue.LeaseDuration < MinLeaseDuration {
+		problems = append(problems, fmt.Sprintf(
+			"pogfarm.queue.lease_duration (POGFARM_QUEUE_LEASE_DURATION) must be at least %s: got %s",
+			MinLeaseDuration, c.Queue.LeaseDuration))
+	}
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
 
