@@ -21,6 +21,10 @@ import (
 // platform no longer has the VOD, for example because it was deleted.
 var ErrVODNotFound = errors.New("source: vod not found")
 
+// ErrStreamerNotFound is returned (wrapped) by RecentVODs when the platform
+// has no account with the given login.
+var ErrStreamerNotFound = errors.New("source: streamer not found")
+
 // ErrViewerClipsUnsupported is returned by ViewerClips when the source does
 // not implement ViewerClipLister.
 var ErrViewerClipsUnsupported = errors.New("source: viewer clips not supported")
@@ -34,6 +38,10 @@ type VOD struct {
 	ID string
 	// Streamer is whose VOD this is.
 	Streamer api.Streamer
+	// StreamerID is the platform's permanent identifier of the streamer's
+	// account, which stays the same when the login changes. RecentVODs
+	// sets it.
+	StreamerID string
 	// Title is the stream title.
 	Title string
 	// StartedAt is when the stream started.
@@ -82,7 +90,8 @@ type Source interface {
 
 	// RecentVODs lists the recent VODs of the streamer with the given
 	// login, newest first. A stream that is still live is included with
-	// Ended false.
+	// Ended false. The error wraps ErrStreamerNotFound when the platform
+	// has no account with that login.
 	RecentVODs(ctx context.Context, login string) ([]VOD, error)
 
 	// Chat returns the whole chat of a VOD, ordered by offset.

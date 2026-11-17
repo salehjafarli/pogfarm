@@ -166,7 +166,7 @@ func TestViewerClipsOptionalCapability(t *testing.T) {
 // that belongs to one platform.
 func TestCommonTypesArePlatformNeutral(t *testing.T) {
 	want := map[reflect.Type][]string{
-		reflect.TypeFor[source.VOD]():         {"Platform", "ID", "Streamer", "Title", "StartedAt", "Duration", "Ended"},
+		reflect.TypeFor[source.VOD]():         {"Platform", "ID", "Streamer", "StreamerID", "Title", "StartedAt", "Duration", "Ended"},
 		reflect.TypeFor[source.ChatMessage](): {"Offset", "User", "Text", "Emotes"},
 		reflect.TypeFor[source.ViewerClip]():  {"Offset", "Duration", "Views", "Title"},
 	}
