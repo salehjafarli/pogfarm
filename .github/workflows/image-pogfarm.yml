@@ -1,0 +1,206 @@
+name: image-pogfarm
+
+# Builds the pogfarm image for linux/amd64 and linux/arm64 and checks that it
+# works: the container becomes healthy, runs as non-root and can run the
+# bundled TwitchDownloaderCLI, including a real chat download. Nothing is
+# pushed to a registry here; publishing is a separate change (#47).
+
+on:
+  pull_request:
+    paths:
+      - deploy/pogfarm.Dockerfile
+      - deploy/pogfarm-healthcheck.sh
+      - .dockerignore
+      - go.mod
+      - go.sum
+      - cmd/pogfarm/**
+      - internal/**
+      - .github/workflows/image-pogfarm.yml
+  push:
+    branches: [master]
+    paths:
+      - deploy/pogfarm.Dockerfile
+      - deploy/pogfarm-healthcheck.sh
+      - .dockerignore
+      - go.mod
+      - go.sum
+      - cmd/pogfarm/**
+      - internal/**
+      - .github/workflows/image-pogfarm.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request replaces the run in progress.
+concurrency:
+  group: image-pogfarm-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: pogfarm:ci
+  # A public Twitch video whose chat is downloaded as a smoke test of
+  # TwitchDownloaderCLI. Ordinary VODs expire, so this must be a highlight or
+  # upload; replace it if Twitch ever removes it.
+  CHAT_VIDEO_ID: "612942303"
+
+jobs:
+  image:
+    name: image (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    # arm64 runs under QEMU emulation, which is slow.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Cache scope
+        id: scope
+        run: echo "name=pogfarm-${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/pogfarm.Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ github.sha }}
+          tags: ${{ env.IMAGE }}
+          load: true
+          push: false
+          cache-from: type=gha,scope=${{ steps.scope.outputs.name }}
+          cache-to: type=gha,mode=max,scope=${{ steps.scope.outputs.name }}
+
+      - name: Image facts
+        run: |
+          set -eu
+          arch=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")
+          bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE")
+          mib=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1048576 }')
+          user=$(docker image inspect --format '{{.Config.User}}' "$IMAGE")
+          echo "platform: $arch, size: $bytes bytes ($mib MiB), user: $user"
+          test "$arch" = "$PLATFORM"
+          docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' "$IMAGE"
+          {
+            echo "### pogfarm image, $PLATFORM"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Size (uncompressed) | $mib MiB ($bytes bytes) |"
+            echo "| User | \`$user\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Version
+        run: |
+          set -eu
+          out=$(docker run --rm --platform "$PLATFORM" "$IMAGE" -version)
+          echo "$out"
+          test "$out" = "pogfarm $GITHUB_SHA"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Start the container
+        run: |
+          set -eu
+          # A throwaway secret, generated here and used only by this run.
+          secret_dir=$(mktemp -d)
+          openssl rand -hex 32 > "$secret_dir/api_secret"
+          chmod 0755 "$secret_dir"
+          chmod 0644 "$secret_dir/api_secret"
+          docker volume create pogfarm-data
+          docker run -d --name pogfarm --platform "$PLATFORM" \
+            -v pogfarm-data:/data \
+            -v "$secret_dir/api_secret:/run/secrets/pogfarm_api_secret:ro" \
+            -e POGFARM_API_SECRET_FILE=/run/secrets/pogfarm_api_secret \
+            -p 127.0.0.1:8080:8080 \
+            "$IMAGE"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Wait for the health check
+        run: |
+          set -eu
+          for i in $(seq 1 90); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' pogfarm)
+            running=$(docker inspect --format '{{.State.Running}}' pogfarm)
+            echo "attempt $i: running=$running health=$status"
+            if [ "$status" = healthy ]; then
+              break
+            fi
+            if [ "$running" != true ]; then
+              echo "container stopped" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' pogfarm)" = healthy
+          docker inspect --format '{{json .State.Health}}' pogfarm
+          # The published port answers from the host as well.
+          curl -fsS http://127.0.0.1:8080/healthz
+          echo
+
+      - name: Runs as non-root and owns the data volume
+        run: |
+          set -eu
+          uid=$(docker exec pogfarm id -u)
+          gid=$(docker exec pogfarm id -g)
+          echo "uid=$uid gid=$gid"
+          test "$uid" != 0
+          test "$gid" != 0
+          docker exec pogfarm ls -la /data
+          owner=$(docker exec pogfarm stat -c '%u' /data)
+          test "$owner" = "$uid"
+          # pogfarm created its database on the volume.
+          docker exec pogfarm sh -c 'ls /data/*.db'
+
+      - name: TwitchDownloaderCLI runs
+        run: |
+          set -eu
+          out=$(docker exec pogfarm sh -c '"$POGFARM_TWITCH_DOWNLOADER_PATH" --version' 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -F "1.56.5"
+          docker exec pogfarm sh -c '"$POGFARM_TWITCH_DOWNLOADER_PATH" --help' 2>&1 | head -40 || true
+
+      - name: TwitchDownloaderCLI downloads chat
+        run: |
+          set -eu
+          # The same flags pogfarm uses (docs/architecture.md), limited to the
+          # first ten minutes so the download stays small.
+          docker exec pogfarm mkdir -p /data/ci-chat
+          docker exec pogfarm sh -c '"$POGFARM_TWITCH_DOWNLOADER_PATH" chatdownload \
+            --id "$1" --beginning 0 --ending 600 \
+            --output /data/ci-chat/chat.json --collision Overwrite --banner=false' sh "$CHAT_VIDEO_ID"
+          docker cp pogfarm:/data/ci-chat/chat.json chat.json
+          comments=$(jq '.comments | length' chat.json)
+          echo "comments: $comments"
+          jq '.comments[0] | {content_offset_seconds, commenter: .commenter.display_name, body: .message.body}' chat.json
+          test "$comments" -gt 0
+          echo "| Chat download of video $CHAT_VIDEO_ID | $comments comments |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: No secrets or config in the image
+        run: |
+          set -eu
+          docker image inspect --format '{{json .Config.Env}}' "$IMAGE" | tee env.json
+          if grep -Ei 'SECRET|TOKEN' env.json; then
+            echo "secret-looking variable baked into the image" >&2
+            exit 1
+          fi
+          docker run --rm --platform "$PLATFORM" --entrypoint sh "$IMAGE" -c \
+            'test -z "$(find / -xdev \( -name config.yaml -o -name "*.db" \) -not -path "/proc/*" 2>/dev/null)"'
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Container logs
+        if: always()
+        run: docker logs pogfarm 2>&1 | tail -100 || true
