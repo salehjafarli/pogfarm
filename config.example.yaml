@@ -234,6 +234,29 @@ pogfarm:
     # Env: POGFARM_UPLOAD_ATTEMPT_TIMEOUT. Default "30m".
     attempt_timeout: "30m"
 
+  # Title, description and tags of posted clips. File only. Patterns use
+  # placeholders in braces: {streamer} (display name), {login}, {channel_url},
+  # {hook} (a short line from the clip's transcript, or the streamer's name
+  # when nobody speaks), {date} (the VOD's date, 2006-01-02), {vod_title}, and
+  # in the description only {hashtags} ("#one #two"). Another name in braces
+  # is an error. Each platform's length limits are enforced by cutting at a
+  # word boundary; the credit line is added after the description and is
+  # never cut. Replying to a clip's review message with a new title replaces
+  # the generated title of that clip. The values shown are the defaults.
+  # post:
+  #   default:
+  #     title: "{hook} | {streamer}"
+  #     description: "{hook}\n\n{hashtags}"
+  #     # With or without '#'. Placeholders allowed.
+  #     hashtags: ["shorts", "{login}"]
+  #     # Required.
+  #     credit: "Credit: {streamer}, streamed live on {date}: {channel_url}"
+  #   # Per-streamer overrides; a key left out takes the default's value.
+  #   streamers:
+  #     - platform: twitch
+  #       login: "some_streamer"
+  #       hashtags: ["shorts", "gaming", "{login}"]
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.

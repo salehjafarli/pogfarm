@@ -61,6 +61,9 @@ type clipInfo struct {
 	DurationSeconds float64
 	TranscriptJSON  string
 	width, height   int
+	// PostTitle is the title the clip will be posted with; empty when not
+	// known. See Sender.PostTitle.
+	PostTitle string
 }
 
 // maxTitleLength caps the VOD title in a caption so a long title cannot
@@ -77,8 +80,9 @@ func (c clipInfo) header() string {
 	if title == "" {
 		title = "(untitled VOD)"
 	}
-	return fmt.Sprintf("Clip #%d · %s\n%s\nAt %s in the VOD · %s long",
+	h := fmt.Sprintf("Clip #%d · %s\n%s\nAt %s in the VOD · %s long",
 		c.ClipID, streamer, title, formatSeconds(c.OffsetSeconds), formatSeconds(c.DurationSeconds))
+	return h + posttextHeader(c.PostTitle)
 }
 
 // caption is the caption of the review video: the header, a blank line and

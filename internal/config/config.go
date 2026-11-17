@@ -90,6 +90,10 @@ type Pogfarm struct {
 
 	// Upload configures the loop that posts approved clips. See upload.go.
 	Upload Upload `yaml:"upload"`
+
+	// Post configures the title, description and tags of posted clips.
+	// See post.go.
+	Post Post `yaml:"post"`
 }
 
 // Streamer is one entry of the allowlist.
@@ -219,6 +223,7 @@ func defaults() file {
 			Scan: defaultScan(),
 
 			Upload: defaultUpload(),
+			Post:   defaultPost(),
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -337,6 +342,7 @@ func (c *Pogfarm) validate() []string {
 	}
 	problems = append(problems, c.Scan.validate()...)
 	problems = append(problems, c.Upload.validate()...)
+	problems = append(problems, c.Post.validate()...)
 	return problems
 }
 
