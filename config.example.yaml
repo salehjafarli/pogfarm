@@ -31,6 +31,19 @@ pogfarm:
   # Env: POGFARM_API_SECRET or POGFARM_API_SECRET_FILE.
   api_secret: "change-me"
 
+  # Twitch API credentials, from an application registered in the Twitch
+  # developer console. pogfarm uses them to obtain an app access token.
+  # Set both keys or neither.
+  twitch:
+    # Client id of the application. Not a secret, but the placeholder is
+    # rejected like one.
+    # Env: POGFARM_TWITCH_CLIENT_ID.
+    client_id: "change-me"
+
+    # Client secret of the application.
+    # Env: POGFARM_TWITCH_CLIENT_SECRET or POGFARM_TWITCH_CLIENT_SECRET_FILE.
+    client_secret: "change-me"
+
 # Render service. Runs on every node.
 clipper:
   # Base URL of the pogfarm job API. Required.
