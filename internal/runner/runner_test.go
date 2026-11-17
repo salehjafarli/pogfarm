@@ -236,31 +236,44 @@ func TestRunKilledBySignal(t *testing.T) {
 
 func TestRunTimeoutKillsProcessAndChild(t *testing.T) {
 	t.Parallel()
-	start := time.Now()
-	res, err := Run(context.Background(), Command{
-		Name:    "sh",
-		Args:    []string{"-c", "echo dying >&2; " + spawnChild},
-		Timeout: time.Second,
-	})
-	elapsed := time.Since(start)
+	// The timeout has to outlast the script's startup, which takes longer
+	// than a second on a heavily loaded machine. When the kill arrives
+	// before the script has written anything, the run says nothing about
+	// the behaviour under test, so it is repeated with a longer timeout.
+	timeouts := []time.Duration{time.Second, 5 * time.Second, 20 * time.Second}
+	for i, timeout := range timeouts {
+		start := time.Now()
+		res, err := Run(context.Background(), Command{
+			Name:    "sh",
+			Args:    []string{"-c", "echo dying >&2; " + spawnChild},
+			Timeout: timeout,
+		})
+		elapsed := time.Since(start)
 
-	e := asError(t, err)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("error %v does not wrap context.DeadlineExceeded", err)
+		e := asError(t, err)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("error %v does not wrap context.DeadlineExceeded", err)
+		}
+		if e.ExitCode != -1 || res.ExitCode != -1 {
+			t.Errorf("exit code: error %d, result %d, want -1", e.ExitCode, res.ExitCode)
+		}
+		if elapsed < timeout || elapsed > timeout+30*time.Second {
+			t.Errorf("returned after %v, want shortly after the %v timeout", elapsed, timeout)
+		}
+		if len(res.Stdout) == 0 && i < len(timeouts)-1 {
+			t.Logf("script had not reported its child within %v; retrying with a longer timeout", timeout)
+			continue
+		}
+
+		if e.Stderr != "dying" {
+			t.Errorf("Stderr = %q, want the output from before the kill", e.Stderr)
+		}
+		if got, want := err.Error(), "run sh: timed out and was killed; stderr tail:\ndying"; got != want {
+			t.Errorf("message = %q, want %q", got, want)
+		}
+		waitGone(t, parsePid(t, res.Stdout))
+		return
 	}
-	if e.ExitCode != -1 || res.ExitCode != -1 {
-		t.Errorf("exit code: error %d, result %d, want -1", e.ExitCode, res.ExitCode)
-	}
-	if e.Stderr != "dying" {
-		t.Errorf("Stderr = %q, want the output from before the kill", e.Stderr)
-	}
-	if got, want := err.Error(), "run sh: timed out and was killed; stderr tail:\ndying"; got != want {
-		t.Errorf("message = %q, want %q", got, want)
-	}
-	if elapsed < time.Second || elapsed > 30*time.Second {
-		t.Errorf("returned after %v, want shortly after the 1s timeout", elapsed)
-	}
-	waitGone(t, parsePid(t, res.Stdout))
 }
 
 func TestRunCancelKillsProcessAndChild(t *testing.T) {
