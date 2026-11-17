@@ -4,24 +4,121 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/salehjafarli/pogfarm/internal/api"
 	"github.com/salehjafarli/pogfarm/internal/config"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/lock"
+	"github.com/salehjafarli/pogfarm/internal/pogfarm/store"
 )
 
 const (
 	// testToken has the shape of a real token but belongs to no bot.
 	testToken = "123456789:TEST-token-that-must-never-be-logged"
 	ownerChat = 4242
-	waitLimit = 5 * time.Second
+	// testSecret is the shared API secret of the test configurations.
+	testSecret = "main-test-shared-api-secret"
+	// waitLimit only guards against a hang; nothing waits for it to pass.
+	waitLimit = 30 * time.Second
 )
+
+// testConfig is a minimal valid configuration: a fresh data directory, a
+// loopback port chosen by the system, and no Telegram bot.
+func testConfig(t *testing.T) *config.Pogfarm {
+	t.Helper()
+	return &config.Pogfarm{
+		ListenAddr:   "127.0.0.1:0",
+		DataDir:      filepath.Join(t.TempDir(), "data"),
+		APISecret:    config.NewSecret(testSecret),
+		MaxClipBytes: config.DefaultMaxClipBytes,
+		Queue: config.Queue{
+			LeaseDuration:  2 * time.Minute,
+			MaxAttempts:    3,
+			ReaperInterval: 15 * time.Second,
+		},
+	}
+}
+
+// logBuffer is a log destination that is safe for concurrent use and can
+// be waited on.
+type logBuffer struct {
+	mu      sync.Mutex
+	buf     bytes.Buffer
+	written chan struct{}
+}
+
+func newLogBuffer() *logBuffer { return &logBuffer{written: make(chan struct{}, 1)} }
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n, err := b.buf.Write(p)
+	select {
+	case b.written <- struct{}{}:
+	default:
+	}
+	return n, err
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// waitFor waits until the log matches re and returns the first submatch.
+func (b *logBuffer) waitFor(t *testing.T, re *regexp.Regexp) string {
+	t.Helper()
+	timeout := time.After(waitLimit)
+	for {
+		if m := re.FindStringSubmatch(b.String()); m != nil {
+			return m[len(m)-1]
+		}
+		select {
+		case <-b.written:
+		case <-timeout:
+			t.Fatalf("log never matched %s:\n%s", re, b.String())
+		}
+	}
+}
+
+var listeningRE = regexp.MustCompile(`msg="job API listening" addr=(\S+)`)
+
+// start runs the service in the background and returns a function that
+// stops it and returns run's result.
+func start(t *testing.T, cfg *config.Pogfarm, log io.Writer, telegramURL string) (stop func() error) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, cfg, slog.New(slog.NewTextHandler(log, nil)), telegramURL) }()
+	var once sync.Once
+	var err error
+	stop = func() error {
+		once.Do(func() {
+			cancel()
+			select {
+			case err = <-done:
+			case <-time.After(waitLimit):
+				t.Fatal("run did not return after cancellation")
+			}
+		})
+		return err
+	}
+	t.Cleanup(func() { _ = stop() })
+	return stop
+}
 
 // TestBotStartsWithPogfarm runs the service against a local stand-in for the
 // Bot API: the owner's /ping is answered with pong, and cancelling the context
@@ -58,18 +155,13 @@ func TestBotStartsWithPogfarm(t *testing.T) {
 	defer srv.Close()
 	defer close(shutdown)
 
-	cfg := &config.Pogfarm{Telegram: config.Telegram{
+	cfg := testConfig(t)
+	cfg.Telegram = config.Telegram{
 		BotToken:    config.NewSecret(testToken),
 		OwnerChatID: ownerChat,
-	}}
-	var log bytes.Buffer
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		run(ctx, cfg, slog.New(slog.NewTextHandler(&log, nil)), srv.URL)
-	}()
+	}
+	log := newLogBuffer()
+	stop := start(t, cfg, log, srv.URL)
 
 	select {
 	case body := <-sent:
@@ -80,11 +172,8 @@ func TestBotStartsWithPogfarm(t *testing.T) {
 		t.Fatal("no answer to /ping")
 	}
 
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(waitLimit):
-		t.Fatal("run did not return after cancellation")
+	if err := stop(); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 	if out := log.String(); strings.Contains(out, testToken) || strings.Contains(out, "TEST-token") {
 		t.Errorf("the log leaks the token:\n%s", out)
@@ -92,21 +181,118 @@ func TestBotStartsWithPogfarm(t *testing.T) {
 }
 
 func TestRunWithoutTelegram(t *testing.T) {
-	var log bytes.Buffer
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		// An address nothing listens on: the bot must not be started.
-		run(ctx, &config.Pogfarm{}, slog.New(slog.NewTextHandler(&log, nil)), "http://127.0.0.1:1")
-	}()
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(waitLimit):
-		t.Fatal("run did not return after cancellation")
+	log := newLogBuffer()
+	// An address nothing listens on: the bot must not be started.
+	stop := start(t, testConfig(t), log, "http://127.0.0.1:1")
+	if err := stop(); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 	if out := log.String(); !strings.Contains(out, "telegram bot is off") || strings.Contains(out, "poll failed") {
 		t.Errorf("unexpected log:\n%s", out)
+	}
+}
+
+// TestRunServesJobAPI starts the service with a minimal configuration and
+// talks to it: health without the secret, the job API with it. A second
+// instance on the same data directory is refused while the first runs, and
+// stopping releases the data directory.
+func TestRunServesJobAPI(t *testing.T) {
+	cfg := testConfig(t)
+	log := newLogBuffer()
+	stop := start(t, cfg, log, "http://127.0.0.1:1")
+	base := "http://" + log.waitFor(t, listeningRE)
+
+	resp, err := http.Get(base + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("healthz: %d", resp.StatusCode)
+	}
+
+	ctx := context.Background()
+	client, err := api.NewClient(api.ClientOptions{BaseURL: base, Secret: testSecret, Clipper: "node-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Claim(ctx); !errors.Is(err, api.ErrNoJob) {
+		t.Errorf("claim: %v, want ErrNoJob", err)
+	}
+	wrong, err := api.NewClient(api.ClientOptions{BaseURL: base, Secret: "not-the-shared-secret", Clipper: "node-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wrong.Claim(ctx); !errors.Is(err, api.ErrUnauthorized) {
+		t.Errorf("claim with a wrong secret: %v, want ErrUnauthorized", err)
+	}
+
+	// A second pogfarm on the same data directory refuses to start, even
+	// on another port.
+	// Its context is already cancelled, so a run that wrongly starts returns
+	// at once instead of hanging the test.
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	second := *cfg
+	err = run(cancelled, &second, slog.New(slog.DiscardHandler), "http://127.0.0.1:1")
+	if !errors.Is(err, lock.ErrHeld) {
+		t.Errorf("second instance: %v, want lock.ErrHeld", err)
+	}
+
+	if err := stop(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if _, err := http.Get(base + "/healthz"); err == nil {
+		t.Error("the job API still answers after shutdown")
+	}
+	if out := log.String(); strings.Contains(out, testSecret) {
+		t.Errorf("the log leaks the API secret:\n%s", out)
+	}
+
+	// The data directory is free again.
+	l, err := lock.Acquire(cfg.DataDir)
+	if err != nil {
+		t.Fatalf("lock after shutdown: %v", err)
+	}
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRunRefusesLockedDataDir checks that pogfarm gives up before touching
+// the data directory when another holder has the lock.
+func TestRunRefusesLockedDataDir(t *testing.T) {
+	cfg := testConfig(t)
+	held, err := lock.Acquire(cfg.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // a run that wrongly starts returns at once
+	err = run(ctx, cfg, slog.New(slog.DiscardHandler), "http://127.0.0.1:1")
+	if !errors.Is(err, lock.ErrHeld) {
+		t.Fatalf("run: %v, want lock.ErrHeld", err)
+	}
+	if _, err := os.Stat(store.Path(cfg.DataDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the database was created: %v", err)
+	}
+}
+
+// TestRunBadListenAddr checks that an unusable address fails startup and
+// still releases the data directory.
+func TestRunBadListenAddr(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.ListenAddr = "127.0.0.1:-1"
+	if err := run(context.Background(), cfg, slog.New(slog.DiscardHandler), "http://127.0.0.1:1"); err == nil {
+		t.Fatal("run with a bad listen address succeeded")
+	}
+	l, err := lock.Acquire(cfg.DataDir)
+	if err != nil {
+		t.Fatalf("lock after failed start: %v", err)
+	}
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
 	}
 }
