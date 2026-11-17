@@ -67,6 +67,11 @@ jobs:
           docker run --rm --network none --entrypoint sh "$IMAGE" -c \
             'du -sh /models/* /opt/twitchdownloader /opt/venv/lib/python3.13/site-packages/* 2>/dev/null | sort -h | tail -n 15'
 
+      # Audio is never committed, so the test clip is downloaded and checked
+      # here, outside the container; the test below has no network.
+      - name: Fetch test fixtures
+        run: bash deploy/clipper-base/test/fetch-fixtures.sh
+
       - name: Smoke test (no network)
         run: |
           set -o pipefail

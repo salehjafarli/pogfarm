@@ -2,6 +2,7 @@
 # Smoke test of the clipper base image. Runs inside the built image with
 # networking disabled; this directory is mounted read-only at /test:
 #
+#   bash deploy/clipper-base/test/fetch-fixtures.sh   # the audio fixture is not committed
 #   docker run --rm --network none -v "$PWD/deploy/clipper-base/test:/test:ro" \
 #     pogfarm-clipper-base:dev bash /test/run-tests.sh
 #

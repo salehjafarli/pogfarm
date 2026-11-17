@@ -67,7 +67,7 @@ The `image-pogfarm` workflow (`.github/workflows/image-pogfarm.yml`) builds the 
 | `clipper-base/uv.lock` | every Python package pinned, with hashes, for both architectures |
 | `clipper-base/fetch.sh` | build helper: download a file and check its SHA-256 |
 | `clipper-base/detect-faces` | the face detector program, installed as `/opt/pogfarm/bin/detect-faces` |
-| `clipper-base/test/` | smoke test and its two small fixtures; not copied into the image |
+| `clipper-base/test/` | smoke test, its image fixture and the script that downloads its audio fixture; not copied into the image |
 
 ### What is in it
 
@@ -132,9 +132,10 @@ To change a Python package, edit `clipper-base/pyproject.toml` and run `uv lock`
 
 ### Testing
 
-`clipper-base/test/run-tests.sh` runs inside the built image with networking disabled:
+`clipper-base/test/run-tests.sh` runs inside the built image with networking disabled. Fetch its audio fixture first:
 
 ```
+bash deploy/clipper-base/test/fetch-fixtures.sh
 docker run --rm --network none -v "$PWD/deploy/clipper-base/test:/test:ro" \
   pogfarm-clipper-base:dev bash /test/run-tests.sh
 ```
@@ -145,7 +146,7 @@ The workflow `.github/workflows/clipper-base.yml` runs this on every pull reques
 
 Test fixtures:
 
-- `test/jfk.mp3`: 11 seconds of John F. Kennedy's 1961 inaugural address ("ask not what your country can do for you"), a work of the US federal government and so in the public domain. Copied from `samples/jfk.mp3` of whisper.cpp at commit `aba02defd6bb6ff5de63721c21e3456645c153e2`.
+- `test/jfk.mp3`: 11 seconds of John F. Kennedy's 1961 inaugural address ("ask not what your country can do for you"), a work of the US federal government and so in the public domain. It is not committed, since audio files never are: `test/fetch-fixtures.sh` downloads `samples/jfk.mp3` of whisper.cpp at commit `aba02defd6bb6ff5de63721c21e3456645c153e2` and checks its SHA-256. Run it once before the test; the workflow does.
 - `test/webcam-frame.jpg`: a 1280x720 frame made for this test: flat shapes standing in for a game, with a 320x240 "webcam" in the lower left at x 24 to 344, y 456 to 696. The webcam picture is a crop of NASA photo S69-31741 (portrait of Neil Armstrong, Apollo 11), public domain as a NASA work, taken from Wikimedia Commons `File:Neil_Armstrong_pose.jpg`.
 
 ### Transcriber per architecture
