@@ -2,8 +2,9 @@ name: image-pogfarm
 
 # Builds the pogfarm image for linux/amd64 and linux/arm64 and checks that it
 # works: the container becomes healthy, runs as non-root and can run the
-# bundled TwitchDownloaderCLI, including a real chat download. Nothing is
-# pushed to a registry here; publishing is a separate change (#47).
+# bundled TwitchDownloaderCLI against Twitch, plus a real chat download when
+# a VOD ID is given. Nothing is pushed to a registry here; publishing is a
+# separate change (#47).
 
 on:
   pull_request:
@@ -28,6 +29,11 @@ on:
       - internal/**
       - .github/workflows/image-pogfarm.yml
   workflow_dispatch:
+    inputs:
+      chat_video_id:
+        description: ID of a current public Twitch VOD whose chat is downloaded as a smoke test
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -39,10 +45,11 @@ concurrency:
 
 env:
   IMAGE: pogfarm:ci
-  # A public Twitch video whose chat is downloaded as a smoke test of
-  # TwitchDownloaderCLI. Ordinary VODs expire, so this must be a highlight or
-  # upload; replace it if Twitch ever removes it.
-  CHAT_VIDEO_ID: "612942303"
+  # A public Twitch VOD whose chat is downloaded as a smoke test of
+  # TwitchDownloaderCLI. VODs expire, so none is fixed here: give one when
+  # starting the workflow by hand, or set the repository variable
+  # CHAT_VIDEO_ID. Without one, only the request to Twitch is checked.
+  CHAT_VIDEO_ID: ${{ inputs.chat_video_id || vars.CHAT_VIDEO_ID }}
 
 jobs:
   image:
@@ -172,7 +179,22 @@ jobs:
           echo "$out" | grep -F "1.56.5"
           docker exec pogfarm sh -c '"$POGFARM_TWITCH_DOWNLOADER_PATH" --help' 2>&1 | head -40 || true
 
+      # Without a video ID: ask Twitch for a video that does not exist. The
+      # tool must reach Twitch over HTTPS and report the video as missing,
+      # which is the message pogfarm turns into source.ErrVODNotFound. This
+      # proves the .NET runtime, TLS, CA certificates and globalization work.
+      - name: TwitchDownloaderCLI reaches Twitch
+        run: |
+          set -eu
+          out=$(docker exec pogfarm sh -c '"$POGFARM_TWITCH_DOWNLOADER_PATH" chatdownload \
+            --id 1 --output /tmp/missing.json --collision Overwrite --banner=false' 2>&1) && rc=0 || rc=$?
+          echo "exit code: $rc"
+          echo "$out" | head -20 || true
+          echo "$out" | grep -F "Invalid VOD, deleted/expired VOD possibly?"
+          echo "| Chat request for a missing video | answered by Twitch (\"Invalid VOD\") |" >> "$GITHUB_STEP_SUMMARY"
+
       - name: TwitchDownloaderCLI downloads chat
+        if: env.CHAT_VIDEO_ID != ''
         run: |
           set -eu
           # The same flags pogfarm uses (docs/architecture.md), limited to the
@@ -186,7 +208,7 @@ jobs:
           echo "comments: $comments"
           jq '.comments[0] | {content_offset_seconds, commenter: .commenter.display_name, body: .message.body}' chat.json
           test "$comments" -gt 0
-          echo "| Chat download of video $CHAT_VIDEO_ID | $comments comments |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Chat download of video $CHAT_VIDEO_ID (first 10 min) | $comments comments |" >> "$GITHUB_STEP_SUMMARY"
 
       - name: No secrets or config in the image
         run: |
