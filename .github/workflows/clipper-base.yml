@@ -63,6 +63,9 @@ jobs:
           docker images "$IMAGE"
           docker image inspect --format '{{.Os}}/{{.Architecture}} user={{.Config.User}}' "$IMAGE"
           docker history --format 'table {{.Size}}\t{{.CreatedBy}}' --no-trunc "$IMAGE" | cut -c1-160
+          echo "largest pieces:"
+          docker run --rm --network none --entrypoint sh "$IMAGE" -c \
+            'du -sh /models/* /opt/twitchdownloader /opt/venv/lib/python3.13/site-packages/* 2>/dev/null | sort -h | tail -n 15'
 
       - name: Smoke test (no network)
         run: |
