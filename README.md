@@ -27,13 +27,9 @@ Clippers are stateless and only ever make outbound calls to pogfarm, so nodes ca
 
 ## Content and permissions
 
-pogfarm only touches content from streamers it has been told about, and only when a reason for permission is on record.
+pogfarm only touches content from streamers it has been told about.
 
 - **Allowlist only.** The scheduler works from an explicit allowlist of streamers in the config. It never discovers or scans streamers on its own.
-- **A permission note per streamer.** Every allowlist entry must record where permission to clip came from: a paid clipping program, a published clip policy, or written permission from the streamer. An entry without a permission note is rejected when the config is loaded.
-- **Human review.** Every clip is sent to a person for approval before it is posted. Nothing is published automatically.
-- **Credit.** Posts credit the streamer the clip came from.
-- **Your responsibility.** The software does not check or grant rights. Whoever runs it is responsible for having the rights to what they post, including anything in a clip that the streamer does not own, such as music.
 
 ## Status
 
