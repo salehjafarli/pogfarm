@@ -89,9 +89,18 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 
 	// Job API: built and bound before any loop starts, so that a bad listen
 	// address fails startup.
-	jobAPI, ln, err := newJobAPI(cfg, st, q, logger)
+	jobAPI, ln, cleaner, err := newJobAPI(cfg, st, q, logger)
 	if err != nil {
 		return err
+	}
+
+	// Uploads that were in flight when pogfarm last stopped are deleted
+	// before the job API accepts new ones.
+	if removed, freed, err := cleaner.EmptyTemp(); err != nil {
+		_ = ln.Close()
+		return err
+	} else if removed > 0 {
+		logger.Info("deleted unfinished uploads", "files", removed, "freed_bytes", freed)
 	}
 
 	// Every loop stops when ctx is cancelled, or when a loop below fails.
@@ -105,6 +114,10 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 		bot := review.NewBot(client, cfg.Telegram.OwnerChatID, logger)
 		loops.Go(func() { bot.Run(ctx) })
 		logger.Info("telegram bot started", "owner_chat_id", cfg.Telegram.OwnerChatID)
+
+		// Review sender: posts each clip awaiting review to the owner's chat.
+		sender := review.NewSender(client, st, cfg.Telegram.OwnerChatID, cfg.DataDir, logger)
+		loops.Go(func() { sender.Run(ctx) })
 	} else {
 		logger.Warn("telegram bot is off: pogfarm.telegram is not configured")
 	}
@@ -128,13 +141,22 @@ func run(ctx context.Context, cfg *config.Pogfarm, logger *slog.Logger, telegram
 		}
 	})
 
+	// Clip file cleanup: deletes the files of rejected clips and of clips
+	// posted everywhere once their retention has passed, and orphaned files.
+	var cleanupErr error
+	loops.Go(func() {
+		if cleanupErr = cleaner.Run(ctx, cfg.Cleanup.Interval); cleanupErr != nil {
+			cancel()
+		}
+	})
+
 	// Discovery and scanning: find new VODs of allowlisted streamers and
 	// turn their chat into render jobs. Off without Twitch credentials.
 	startScanning(ctx, cfg, st, q, sources, logger, &loops)
 
 	<-ctx.Done()
 	loops.Wait()
-	return errors.Join(serveErr, reaperErr)
+	return errors.Join(serveErr, reaperErr, cleanupErr)
 }
 
 // newSources builds the registry of stream platforms from the
@@ -201,15 +223,17 @@ func openCore(ctx context.Context, cfg *config.Pogfarm) (*store.Store, *queue.Qu
 }
 
 // newJobAPI builds the job API server, with the result intake behind its
-// complete route, and binds its listen address.
-func newJobAPI(cfg *config.Pogfarm, st *store.Store, q *queue.Queue, logger *slog.Logger) (*server.Server, net.Listener, error) {
+// complete route, and binds its listen address. It also returns the cleaner
+// of the clip files, which must belong to the same intake: it removes
+// orphaned files under the lock that intake holds while it stores a result.
+func newJobAPI(cfg *config.Pogfarm, st *store.Store, q *queue.Queue, logger *slog.Logger) (*server.Server, net.Listener, *intake.Cleaner, error) {
 	in, err := intake.New(st, intake.Options{
 		DataDir:      cfg.DataDir,
 		MaxClipBytes: cfg.MaxClipBytes,
 		Logger:       logger,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	srv, err := server.New(server.Options{
 		Secret: cfg.APISecret.Reveal(),
@@ -219,11 +243,19 @@ func newJobAPI(cfg *config.Pogfarm, st *store.Store, q *queue.Queue, logger *slo
 		Logger: logger,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	cleaner, err := in.NewCleaner(intake.CleanupOptions{
+		RejectedRetention: cfg.Cleanup.RejectedRetention,
+		PostedRetention:   cfg.Cleanup.PostedRetention,
+		Logger:            logger,
+	})
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("job API: %w", err)
+		return nil, nil, nil, fmt.Errorf("job API: %w", err)
 	}
-	return srv, ln, nil
+	return srv, ln, cleaner, nil
 }
