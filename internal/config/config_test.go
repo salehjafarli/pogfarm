@@ -39,6 +39,8 @@ var allEnv = []string{
 	// Upload loop (upload_test.go).
 	"POGFARM_UPLOAD_MAX_ATTEMPTS", "POGFARM_UPLOAD_RETRY_BACKOFF", "POGFARM_UPLOAD_MAX_RETRY_BACKOFF",
 	"POGFARM_UPLOAD_POLL_INTERVAL", "POGFARM_UPLOAD_ATTEMPT_TIMEOUT",
+	// Review decisions (review_test.go).
+	"POGFARM_REVIEW_UNDO_WINDOW",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
