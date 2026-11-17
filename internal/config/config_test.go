@@ -29,6 +29,7 @@ var allEnv = []string{
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
 	"POGFARM_TWITCH_CLIENT_ID", "POGFARM_TWITCH_CLIENT_SECRET", "POGFARM_TWITCH_CLIENT_SECRET_FILE",
 	"POGFARM_QUEUE_LEASE_DURATION",
+	"POGFARM_TWITCH_DOWNLOADER_PATH",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
@@ -774,5 +775,48 @@ func TestQueueLeaseDuration(t *testing.T) {
 				t.Errorf("lease duration = %s, want %s", cfg.Queue.LeaseDuration, tt.want)
 			}
 		})
+	}
+}
+
+func TestTwitchDownloaderPath(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "TwitchDownloaderCLI" {
+		t.Errorf("default: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  twitch_downloader_path: /opt/tools/TwitchDownloaderCLI
+`)
+	if cfg, err = LoadPogfarm(path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "/opt/tools/TwitchDownloaderCLI" {
+		t.Errorf("from file: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	t.Setenv("POGFARM_TWITCH_DOWNLOADER_PATH", "/from/env")
+	if cfg, err = LoadPogfarm(path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "/from/env" {
+		t.Errorf("env should override file: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	t.Setenv("POGFARM_TWITCH_DOWNLOADER_PATH", "")
+	path = writeFile(t, "config.yaml", `
+pogfarm:
+  twitch_downloader_path: ""
+`)
+	_, err = LoadPogfarm(path)
+	got := problemsOf(t, err)
+	if len(got) != 1 || !strings.Contains(got[0], "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty") {
+		t.Errorf("empty path: got problems %q", got)
 	}
 }

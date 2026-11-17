@@ -46,6 +46,11 @@ type Pogfarm struct {
 	Twitch Twitch `yaml:"twitch"`
 	// Telegram configures the review bot.
 	Telegram Telegram `yaml:"telegram"`
+
+	// TwitchDownloaderPath is the TwitchDownloaderCLI program used to
+	// download the chat of a Twitch VOD: a path, or a name looked up in
+	// PATH.
+	TwitchDownloaderPath string `yaml:"twitch_downloader_path" env:"POGFARM_TWITCH_DOWNLOADER_PATH"`
 }
 
 // Queue is the "queue" section of the main service's configuration.
@@ -107,6 +112,8 @@ func defaults() file {
 			ListenAddr: ":8080",
 			DataDir:    "data",
 			Queue:      Queue{LeaseDuration: 2 * time.Minute},
+
+			TwitchDownloaderPath: "TwitchDownloaderCLI",
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
@@ -192,6 +199,10 @@ func (c *Pogfarm) validate() []string {
 	}
 	problems = append(problems, c.Twitch.validate()...)
 	problems = append(problems, c.Telegram.validate()...)
+
+	if c.TwitchDownloaderPath == "" {
+		problems = append(problems, "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty")
+	}
 	return problems
 }
 

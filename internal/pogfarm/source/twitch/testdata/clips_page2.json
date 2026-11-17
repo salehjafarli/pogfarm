@@ -1,0 +1,64 @@
+{
+  "data": [
+    {
+      "id": "ClutchClipEEE",
+      "url": "https://clips.twitch.tv/ClutchClipEEE",
+      "embed_url": "https://clips.twitch.tv/embed?clip=ClutchClipEEE",
+      "broadcaster_id": "141981764",
+      "broadcaster_name": "ExampleStreamer",
+      "creator_id": "5005",
+      "creator_name": "viewer_5005",
+      "video_id": "2001",
+      "game_id": "33214",
+      "language": "en",
+      "title": "INSANE clutch",
+      "view_count": 1200,
+      "created_at": "2026-11-10T19:31:40Z",
+      "thumbnail_url": "https://clips-media-assets2.twitch.tv/ClutchClipEEE-preview-480x272.jpg",
+      "duration": 45.2,
+      "vod_offset": 5400,
+      "is_featured": false
+    },
+    {
+      "id": "ClutchClipAAA",
+      "url": "https://clips.twitch.tv/ClutchClipAAA",
+      "embed_url": "https://clips.twitch.tv/embed?clip=ClutchClipAAA",
+      "broadcaster_id": "141981764",
+      "broadcaster_name": "ExampleStreamer",
+      "creator_id": "5001",
+      "creator_name": "viewer_5001",
+      "video_id": "2001",
+      "game_id": "33214",
+      "language": "en",
+      "title": "Clutch 1v3",
+      "view_count": 900,
+      "created_at": "2026-11-10T19:31:02Z",
+      "thumbnail_url": "https://clips-media-assets2.twitch.tv/ClutchClipAAA-preview-480x272.jpg",
+      "duration": 30,
+      "vod_offset": 5400,
+      "is_featured": false
+    },
+    {
+      "id": "NullOffsetFFF",
+      "url": "https://clips.twitch.tv/NullOffsetFFF",
+      "embed_url": "https://clips.twitch.tv/embed?clip=NullOffsetFFF",
+      "broadcaster_id": "141981764",
+      "broadcaster_name": "ExampleStreamer",
+      "creator_id": "5006",
+      "creator_name": "viewer_5006",
+      "video_id": "2001",
+      "game_id": "33214",
+      "language": "en",
+      "title": "Offset still pending",
+      "view_count": 35,
+      "created_at": "2026-11-10T20:10:00Z",
+      "thumbnail_url": "https://clips-media-assets2.twitch.tv/NullOffsetFFF-preview-480x272.jpg",
+      "duration": 15,
+      "vod_offset": null,
+      "is_featured": false
+    }
+  ],
+  "pagination": {
+    "cursor": "cursor-page-3"
+  }
+}
