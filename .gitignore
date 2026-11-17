@@ -1,0 +1,34 @@
+# Secrets and personal config: never commit
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+config.yaml
+config.local.*
+!config.example.yaml
+
+# State and media
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+data/
+scratch/
+*.mp4
+*.mkv
+*.ts
+*.wav
+
+# Go
+bin/
+dist/
+*.test
+*.out
+vendor/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
