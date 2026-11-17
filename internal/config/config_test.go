@@ -28,6 +28,7 @@ var allEnv = []string{
 	"POGFARM_TELEGRAM_BOT_TOKEN", "POGFARM_TELEGRAM_BOT_TOKEN_FILE", "POGFARM_TELEGRAM_OWNER_CHAT_ID",
 	"CLIPPER_POGFARM_URL", "CLIPPER_API_SECRET", "CLIPPER_API_SECRET_FILE", "CLIPPER_SCRATCH_DIR", "CLIPPER_NAME",
 	"POGFARM_TWITCH_CLIENT_ID", "POGFARM_TWITCH_CLIENT_SECRET", "POGFARM_TWITCH_CLIENT_SECRET_FILE",
+	"POGFARM_TWITCH_DOWNLOADER_PATH",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
@@ -728,5 +729,48 @@ func TestTelegramTokenIsNeverPrinted(t *testing.T) {
 	}
 	if !strings.Contains(cfg.String(), "owner_chat_id: 4242") {
 		t.Errorf("String should still show the owner chat id, got:\n%s", cfg.String())
+	}
+}
+
+func TestTwitchDownloaderPath(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("POGFARM_API_SECRET", goodSecret)
+
+	cfg, err := LoadPogfarm("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "TwitchDownloaderCLI" {
+		t.Errorf("default: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	path := writeFile(t, "config.yaml", `
+pogfarm:
+  twitch_downloader_path: /opt/tools/TwitchDownloaderCLI
+`)
+	if cfg, err = LoadPogfarm(path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "/opt/tools/TwitchDownloaderCLI" {
+		t.Errorf("from file: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	t.Setenv("POGFARM_TWITCH_DOWNLOADER_PATH", "/from/env")
+	if cfg, err = LoadPogfarm(path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchDownloaderPath != "/from/env" {
+		t.Errorf("env should override file: got %q", cfg.TwitchDownloaderPath)
+	}
+
+	t.Setenv("POGFARM_TWITCH_DOWNLOADER_PATH", "")
+	path = writeFile(t, "config.yaml", `
+pogfarm:
+  twitch_downloader_path: ""
+`)
+	_, err = LoadPogfarm(path)
+	got := problemsOf(t, err)
+	if len(got) != 1 || !strings.Contains(got[0], "pogfarm.twitch_downloader_path (POGFARM_TWITCH_DOWNLOADER_PATH) must not be empty") {
+		t.Errorf("empty path: got problems %q", got)
 	}
 }
