@@ -31,6 +31,7 @@ var allEnv = []string{
 	"POGFARM_QUEUE_LEASE_DURATION", "POGFARM_QUEUE_MAX_ATTEMPTS", "POGFARM_QUEUE_REAPER_INTERVAL",
 	"POGFARM_DISCOVERY_MAX_VOD_AGE",
 	"POGFARM_TWITCH_DOWNLOADER_PATH",
+	"POGFARM_MAX_CLIP_BYTES",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
@@ -774,6 +775,49 @@ func TestQueueLeaseDuration(t *testing.T) {
 			}
 			if cfg.Queue.LeaseDuration != tt.want {
 				t.Errorf("lease duration = %s, want %s", cfg.Queue.LeaseDuration, tt.want)
+			}
+		})
+	}
+}
+
+func TestMaxClipBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string // value of pogfarm.max_clip_bytes; "" leaves the key out
+		env     string
+		want    int64
+		problem string
+	}{
+		{name: "default", want: DefaultMaxClipBytes},
+		{name: "from file", file: "1048576", want: 1 << 20},
+		{name: "env overrides file", file: "1048576", env: "2048", want: 2048},
+		{name: "zero", file: "0", problem: "pogfarm.max_clip_bytes (POGFARM_MAX_CLIP_BYTES) must be a positive number of bytes: got 0"},
+		{name: "negative", env: "-1", problem: "must be a positive number of bytes: got -1"},
+		{name: "not a number", env: "lots", problem: "POGFARM_MAX_CLIP_BYTES: not a whole number"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanEnv(t)
+			content := "pogfarm:\n  api_secret: " + goodSecret + "\n"
+			if tt.file != "" {
+				content += "  max_clip_bytes: " + tt.file + "\n"
+			}
+			if tt.env != "" {
+				t.Setenv("POGFARM_MAX_CLIP_BYTES", tt.env)
+			}
+			cfg, err := LoadPogfarm(writeFile(t, "config.yaml", content))
+			if tt.problem != "" {
+				problems := problemsOf(t, err)
+				if len(problems) != 1 || !strings.Contains(problems[0], tt.problem) {
+					t.Fatalf("problems = %q, want one containing %q", problems, tt.problem)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.MaxClipBytes != tt.want {
+				t.Errorf("max clip bytes = %d, want %d", cfg.MaxClipBytes, tt.want)
 			}
 		})
 	}

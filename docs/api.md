@@ -220,6 +220,13 @@ or, when the job already had a result:
 
 Both mean the job is done. pogfarm verifies the checksum before accepting; a result is only ever stored whole.
 
+Limits and checks:
+
+- The `clip` part may be at most `pogfarm.max_clip_bytes` (default 256 MiB), the `metadata` part 64 KiB and the `transcript` part 4 MiB. A `size_bytes` above the clip limit is rejected before the clip is read.
+- A clip whose SHA-256 differs from `sha256` is `checksum_mismatch`. A clip whose SHA-256 matches but whose size differs from `size_bytes` is `invalid_request`: the metadata is wrong, and sending it again cannot help.
+- `metadata` needs a non-empty `clipper`, a positive `size_bytes`, `duration_seconds`, `width` and `height`. `transcript.words` must be an array, and every word must have `0 <= start_seconds <= end_seconds`.
+- An upload that ends before the closing boundary, or has a part after `clip`, is `invalid_request` and nothing is stored.
+
 | Status | Code | When | Clipper does |
 |---|---|---|---|
 | 200 | – | `accepted` or `already_completed` | Job is done |

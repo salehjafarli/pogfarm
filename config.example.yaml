@@ -31,6 +31,11 @@ pogfarm:
   # Env: POGFARM_API_SECRET or POGFARM_API_SECRET_FILE.
   api_secret: "change-me"
 
+  # Largest clip file a clipper may upload, in bytes. A larger upload is
+  # rejected with payload_too_large.
+  # Env: POGFARM_MAX_CLIP_BYTES. Default 268435456 (256 MiB).
+  max_clip_bytes: 268435456
+
   # Job queue.
   queue:
     # How long a claimed job stays with its clipper without a heartbeat
