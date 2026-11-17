@@ -1,0 +1,141 @@
+{
+  "FileInfo": {
+    "Version": { "Major": 1, "Minor": 4, "Patch": 0 },
+    "CreatedAt": "2026-11-17T10:00:00.0000000Z",
+    "UpdatedAt": "0001-01-01T00:00:00"
+  },
+  "streamer": { "name": "ExampleStreamer", "login": "examplestreamer", "id": 100000001 },
+  "clipper": null,
+  "video": {
+    "title": "Example stream title",
+    "description": null,
+    "id": "2000000001",
+    "created_at": "2026-11-16T18:00:00Z",
+    "start": 0,
+    "end": 3600,
+    "length": 3600,
+    "viewCount": 1234,
+    "game": "Just Chatting",
+    "chapters": [
+      {
+        "id": "chapter-0001",
+        "startMilliseconds": 0,
+        "lengthMilliseconds": 3600000,
+        "type": "GAME_CHANGE",
+        "description": "Just Chatting",
+        "subDescription": "",
+        "thumbnailUrl": "https://example.invalid/chapter.jpg",
+        "gameId": "509658",
+        "gameDisplayName": "Just Chatting",
+        "gameBoxArtUrl": "https://example.invalid/boxart.jpg"
+      }
+    ]
+  },
+  "comments": [
+    {
+      "_id": "00000000-0000-0000-0000-000000000001",
+      "created_at": "2026-11-16T18:00:01.5Z",
+      "channel_id": "100000001",
+      "content_type": "video",
+      "content_id": "2000000001",
+      "content_offset_seconds": 1.5,
+      "commenter": {
+        "display_name": "ViewerOne",
+        "_id": "300000001",
+        "name": "viewerone",
+        "bio": "an example bio",
+        "created_at": "2019-03-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "logo": "https://example.invalid/viewerone-300x300.png"
+      },
+      "message": {
+        "body": "hello chat",
+        "bits_spent": 0,
+        "fragments": [ { "text": "hello chat", "emoticon": null } ],
+        "user_badges": [ { "_id": "subscriber", "version": "12" } ],
+        "user_color": "#FF0000",
+        "emoticons": []
+      }
+    },
+    {
+      "_id": "00000000-0000-0000-0000-000000000002",
+      "created_at": "2026-11-16T18:00:12.25Z",
+      "channel_id": "100000001",
+      "content_type": "video",
+      "content_id": "2000000001",
+      "content_offset_seconds": 12.25,
+      "commenter": {
+        "display_name": "ViewerTwo",
+        "_id": "300000002",
+        "name": "viewertwo",
+        "bio": null,
+        "created_at": "2021-06-15T08:30:00Z",
+        "updated_at": "2026-09-20T08:30:00Z",
+        "logo": "https://example.invalid/viewertwo-300x300.png"
+      },
+      "message": {
+        "body": "that was insane PogChamp PogChamp LUL",
+        "bits_spent": 0,
+        "fragments": [
+          { "text": "that was insane ", "emoticon": null },
+          { "text": "PogChamp", "emoticon": { "emoticon_id": "305954156" } },
+          { "text": " ", "emoticon": null },
+          { "text": "PogChamp", "emoticon": { "emoticon_id": "305954156" } },
+          { "text": " ", "emoticon": null },
+          { "text": "LUL", "emoticon": { "emoticon_id": "425618" } }
+        ],
+        "user_badges": [],
+        "user_color": null,
+        "emoticons": [
+          { "_id": "305954156", "begin": 16, "end": 23 },
+          { "_id": "305954156", "begin": 25, "end": 32 },
+          { "_id": "425618", "begin": 34, "end": 36 }
+        ]
+      }
+    },
+    {
+      "_id": "00000000-0000-0000-0000-000000000003",
+      "created_at": "2026-11-16T18:01:05Z",
+      "channel_id": "100000001",
+      "content_type": "video",
+      "content_id": "2000000001",
+      "content_offset_seconds": 65,
+      "commenter": null,
+      "message": {
+        "body": "message from a deleted account",
+        "bits_spent": 0,
+        "fragments": [ { "text": "message from a deleted account", "emoticon": null } ],
+        "user_badges": [],
+        "user_color": null,
+        "emoticons": []
+      }
+    },
+    {
+      "_id": "00000000-0000-0000-0000-000000000004",
+      "created_at": "2026-11-16T18:59:59.999Z",
+      "channel_id": "100000001",
+      "content_type": "video",
+      "content_id": "2000000001",
+      "content_offset_seconds": 3599.999,
+      "commenter": {
+        "display_name": "",
+        "_id": "300000004",
+        "name": "viewerfour",
+        "bio": null,
+        "created_at": "2022-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "logo": "https://example.invalid/viewerfour-300x300.png"
+      },
+      "message": {
+        "body": "gg \"çox sağ ol\" 👋 Cheer100",
+        "bits_spent": 100,
+        "fragments": [ { "text": "gg \"çox sağ ol\" 👋 Cheer100", "emoticon": null } ],
+        "user_badges": [ { "_id": "bits", "version": "100" } ],
+        "user_color": "#1E90FF",
+        "user_notice_params": { "msg_id": null },
+        "emoticons": []
+      }
+    }
+  ],
+  "embeddedData": null
+}

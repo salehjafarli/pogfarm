@@ -9,5 +9,13 @@
 // and, in WAL mode, run concurrently with each other and with the writer.
 //
 // The schema lives in migrations/, one numbered SQL file per change; see the
-// README there for how to add one.
+// README there for how to add one. The first migration creates the core
+// tables (streamers, vods, candidates, jobs, clips, uploads) and documents
+// the conventions of the schema. Each table has a row type here with plain
+// Insert, Get and Update functions, and its status values are typed
+// constants.
+//
+// Times are stored as text in UTC in one fixed-width format (TimeLayout), so
+// they compare correctly as strings in SQL. Hand-written queries pass times
+// through FormatTime.
 package store
