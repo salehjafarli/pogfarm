@@ -201,6 +201,13 @@ type Clipper struct {
 
 	// Caption configures the subtitle file burned into each clip.
 	Caption ClipperCaption `yaml:"caption"`
+
+	// Render configures the final encode. See clipper_render.go.
+	Render ClipperRender `yaml:"render"`
+
+	// WebcamDetection switches webcam detection. See
+	// clipper_webcam_detection.go.
+	WebcamDetection ClipperWebcamDetection `yaml:"webcam_detection"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -245,6 +252,10 @@ func defaults() file {
 			Transcribe: defaultClipperTranscribe(),
 
 			Caption: defaultClipperCaption(),
+
+			Render: defaultClipperRender(),
+
+			WebcamDetection: defaultClipperWebcamDetection(),
 		},
 	}
 }
@@ -505,11 +516,23 @@ func (c *Clipper) validate() []string {
 		problems = append(problems, fmt.Sprintf(
 			"clipper.name (CLIPPER_NAME) must be 1 to 63 letters, digits, dots, dashes or underscores, starting with a letter or digit: got %q", c.Name))
 	}
+	problems = append(problems, c.validateSteps()...)
+	return problems
+}
+
+// validateSteps checks the sections a render uses. LoadClipperRender checks
+// only these.
+func (c *Clipper) validateSteps() []string {
+	var problems []string
 	problems = append(problems, c.Layout.validate()...)
 
 	problems = append(problems, c.Download.validate()...)
 	problems = append(problems, c.Transcribe.validate()...)
 	problems = append(problems, c.Caption.validate()...)
+
+	problems = append(problems, c.Render.validate()...)
+
+	problems = append(problems, c.WebcamDetection.validate()...)
 	return problems
 }
 
