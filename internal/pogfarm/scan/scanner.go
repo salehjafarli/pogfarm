@@ -60,12 +60,12 @@ type Scanner struct {
 	Spike      SpikeParams
 	Candidates CandidateParams
 
-	// SkipChatSpikes turns chat spike detection off: the chat is not
-	// fetched and no spikes are detected. SkipViewerClips turns viewer
-	// clips off: the source is not asked for them. The zero value uses
-	// both; skipping both is an error.
-	SkipChatSpikes  bool
-	SkipViewerClips bool
+	// ChatSpikes and ViewerClips switch the two signals on. A signal that
+	// is off is skipped entirely: with ChatSpikes off the chat is not
+	// fetched, and with ViewerClips off the source is not asked for them.
+	// At least one must be on.
+	ChatSpikes  bool
+	ViewerClips bool
 
 	// MaxAttempts is how many scans of one VOD are started before a VOD
 	// whose scans keep failing is given up. Zero means DefaultScanAttempts.
@@ -98,8 +98,8 @@ func NewScanner(st *store.Store, q *queue.Queue, sources *source.Registry, c con
 		Sources:         sources,
 		Spike:           SpikeParams(c.Spike),
 		Candidates:      CandidateParams(c.Candidates),
-		SkipChatSpikes:  !c.ChatSpikes,
-		SkipViewerClips: !c.ViewerClips,
+		ChatSpikes:      c.ChatSpikes,
+		ViewerClips:     c.ViewerClips,
 		MaxAttempts:     c.MaxAttempts,
 		RetryBackoff:    c.RetryBackoff,
 		MaxRetryBackoff: c.MaxRetryBackoff,
@@ -169,7 +169,7 @@ func (s *Scanner) check() error {
 	if s.Store == nil || s.Queue == nil || s.Sources == nil {
 		return errors.New("scan: scanner needs a store, a queue and sources")
 	}
-	if s.SkipChatSpikes && s.SkipViewerClips {
+	if !s.ChatSpikes && !s.ViewerClips {
 		return errors.New("scan: chat spikes and viewer clips are both off; at least one signal is needed")
 	}
 	return errors.Join(s.Spike.Validate(), s.Candidates.Validate())
@@ -301,7 +301,7 @@ func (s *Scanner) scan(ctx context.Context, vod store.VOD) (int, QueueResult, er
 	// A signal that is switched off is skipped entirely, so its platform
 	// requests and tools are not needed.
 	var spikes []Spike
-	if !s.SkipChatSpikes {
+	if s.ChatSpikes {
 		chat, err := src.Chat(ctx, sv)
 		if err != nil {
 			return 0, QueueResult{}, fmt.Errorf("fetch chat: %w", err)
@@ -311,7 +311,7 @@ func (s *Scanner) scan(ctx context.Context, vod store.VOD) (int, QueueResult, er
 		}
 	}
 	var clips []source.ViewerClip
-	if !s.SkipViewerClips {
+	if s.ViewerClips {
 		var err error
 		clips, err = source.ViewerClips(ctx, src, sv)
 		if errors.Is(err, source.ErrViewerClipsUnsupported) {

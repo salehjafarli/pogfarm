@@ -25,7 +25,7 @@ func scanViewerClipCalls(f *scanFixture) int {
 
 func TestScannerWithChatSpikesOff(t *testing.T) {
 	f := newScanFixture(t)
-	f.scanner.SkipChatSpikes = true
+	f.scanner.ChatSpikes = false
 	f.addVOD("v1", store.ScanNew, 0)
 
 	res, scanned := f.next()
@@ -45,7 +45,7 @@ func TestScannerWithChatSpikesOff(t *testing.T) {
 
 func TestScannerWithViewerClipsOff(t *testing.T) {
 	f := newScanFixture(t)
-	f.scanner.SkipViewerClips = true
+	f.scanner.ViewerClips = false
 	f.addVOD("v1", store.ScanNew, 0)
 
 	res, scanned := f.next()
@@ -65,8 +65,8 @@ func TestScannerWithViewerClipsOff(t *testing.T) {
 
 func TestScannerWithBothSignalsOffIsRejected(t *testing.T) {
 	f := newScanFixture(t)
-	f.scanner.SkipChatSpikes = true
-	f.scanner.SkipViewerClips = true
+	f.scanner.ChatSpikes = false
+	f.scanner.ViewerClips = false
 	v := f.addVOD("v1", store.ScanNew, 0)
 	ctx := context.Background()
 
@@ -81,15 +81,12 @@ func TestScannerWithBothSignalsOffIsRejected(t *testing.T) {
 	}
 }
 
-// NewScanner carries the config switches over, inverted.
+// NewScanner carries the config switches over.
 func TestNewScannerTakesTheSignalSwitches(t *testing.T) {
-	c := config.Scan{ChatSpikes: false, ViewerClips: true}
-	s := NewScanner(nil, nil, nil, c, nil)
-	if !s.SkipChatSpikes || s.SkipViewerClips {
-		t.Errorf("SkipChatSpikes %v, SkipViewerClips %v; want true, false", s.SkipChatSpikes, s.SkipViewerClips)
-	}
-	c = config.Scan{ChatSpikes: true, ViewerClips: true}
-	if s := NewScanner(nil, nil, nil, c, nil); s.SkipChatSpikes || s.SkipViewerClips {
-		t.Errorf("both on: SkipChatSpikes %v, SkipViewerClips %v", s.SkipChatSpikes, s.SkipViewerClips)
+	for _, c := range []config.Scan{{ChatSpikes: false, ViewerClips: true}, {ChatSpikes: true, ViewerClips: false}} {
+		s := NewScanner(nil, nil, nil, c, nil)
+		if s.ChatSpikes != c.ChatSpikes || s.ViewerClips != c.ViewerClips {
+			t.Errorf("config %+v gave ChatSpikes %v, ViewerClips %v", c, s.ChatSpikes, s.ViewerClips)
+		}
 	}
 }

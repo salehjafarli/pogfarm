@@ -122,6 +122,8 @@ func newScanFixture(t *testing.T) *scanFixture {
 			Sources:         reg,
 			Spike:           DefaultSpikeParams(),
 			Candidates:      DefaultCandidateParams(),
+			ChatSpikes:      true,
+			ViewerClips:     true,
 			MaxAttempts:     3,
 			RetryBackoff:    time.Minute,
 			MaxRetryBackoff: 3 * time.Minute,
