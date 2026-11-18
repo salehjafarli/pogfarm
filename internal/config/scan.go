@@ -26,6 +26,13 @@ type Scan struct {
 	// MaxRetryBackoff caps the wait between two scans of one VOD.
 	MaxRetryBackoff time.Duration `yaml:"max_retry_backoff" env:"POGFARM_SCAN_MAX_RETRY_BACKOFF"`
 
+	// ChatSpikes switches chat spike detection on or off. Off, the chat of
+	// a VOD is not downloaded at all.
+	ChatSpikes bool `yaml:"chat_spikes" env:"POGFARM_SCAN_CHAT_SPIKES"`
+	// ViewerClips switches viewer-made clips on or off as a signal. Off,
+	// the platform is not asked for them. At least one of the two is on.
+	ViewerClips bool `yaml:"viewer_clips" env:"POGFARM_SCAN_VIEWER_CLIPS"`
+
 	// Spike tunes chat spike detection. File only.
 	Spike SpikeParams `yaml:"spike"`
 	// Candidates tunes how spikes and viewer clips become clip windows.
@@ -68,6 +75,8 @@ func defaultScan() Scan {
 		MaxAttempts:     5,
 		RetryBackoff:    10 * time.Minute,
 		MaxRetryBackoff: 6 * time.Hour,
+		ChatSpikes:      true,
+		ViewerClips:     true,
 		Spike: SpikeParams{
 			Window:      5 * time.Second,
 			Baseline:    5 * time.Minute,
@@ -110,6 +119,10 @@ func (s Scan) validate() []string {
 		problems = append(problems, fmt.Sprintf(
 			"pogfarm.scan.max_retry_backoff (POGFARM_SCAN_MAX_RETRY_BACKOFF) must be at least retry_backoff (%s): got %s",
 			s.RetryBackoff, s.MaxRetryBackoff))
+	}
+	if !s.ChatSpikes && !s.ViewerClips {
+		problems = append(problems, "pogfarm.scan.chat_spikes (POGFARM_SCAN_CHAT_SPIKES) and pogfarm.scan.viewer_clips "+
+			"(POGFARM_SCAN_VIEWER_CLIPS) are both off: the scanner would never find a moment to clip; turn at least one on")
 	}
 	problems = append(problems, s.Spike.validate()...)
 	problems = append(problems, s.Candidates.validate()...)

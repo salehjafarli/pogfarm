@@ -162,6 +162,16 @@ pogfarm:
     # Env: POGFARM_SCAN_MAX_RETRY_BACKOFF. Default "6h".
     max_retry_backoff: "6h"
 
+    # The two signals that pick moments to clip. A signal that is off is
+    # skipped entirely. At least one must be on.
+    # Bursts of chat activity. Off: the chat is not downloaded, so
+    # TwitchDownloaderCLI is not needed.
+    # Env: POGFARM_SCAN_CHAT_SPIKES. Default true.
+    chat_spikes: true
+    # Clips viewers made of the VOD. Off: the platform is not asked for them.
+    # Env: POGFARM_SCAN_VIEWER_CLIPS. Default true.
+    viewer_clips: true
+
     # Chat spike detection. File only. The chat is cut into windows; a
     # window is flagged when it holds at least min_messages messages and
     # factor times the average of the windows within baseline around it.

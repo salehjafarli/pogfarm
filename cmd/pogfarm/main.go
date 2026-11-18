@@ -282,7 +282,8 @@ func startScanning(ctx context.Context, cfg *config.Pogfarm, st *store.Store, q 
 		}
 	})
 	logger.Info("discovery and scanner started", "streamers", len(cfg.Streamers),
-		"discovery_interval", cfg.Discovery.Interval, "scan_workers", cfg.Scan.Workers)
+		"discovery_interval", cfg.Discovery.Interval, "scan_workers", cfg.Scan.Workers,
+		"chat_spikes", cfg.Scan.ChatSpikes, "viewer_clips", cfg.Scan.ViewerClips)
 }
 
 // openCore opens the database in the data directory and builds the job
