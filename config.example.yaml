@@ -287,6 +287,29 @@ clipper:
   # Env: CLIPPER_API_SECRET or CLIPPER_API_SECRET_FILE.
   api_secret: "change-me"
 
+  # How the clipper fetches the part of the stream a render asks for.
+  download:
+    # TwitchDownloaderCLI, which downloads a range of a Twitch VOD (1.56.5
+    # is the tested version). A path, or a name looked up in PATH.
+    # Env: CLIPPER_DOWNLOAD_TWITCH_DOWNLOADER_PATH. Default "TwitchDownloaderCLI".
+    twitch_downloader_path: "TwitchDownloaderCLI"
+    # ffmpeg and ffprobe, which trim the range to the exact start and end
+    # and check the result.
+    # Env: CLIPPER_DOWNLOAD_FFMPEG_PATH, CLIPPER_DOWNLOAD_FFPROBE_PATH.
+    # Defaults "ffmpeg" and "ffprobe".
+    ffmpeg_path: "ffmpeg"
+    ffprobe_path: "ffprobe"
+    # Twitch stream quality, as TwitchDownloaderCLI names it ("1080p60",
+    # "720p60", ...). A VOD without that stream is downloaded in its best one.
+    # Env: CLIPPER_DOWNLOAD_QUALITY. Default "1080p60".
+    quality: "1080p60"
+    # A download or trim is killed after timeout_base plus timeout_per_second
+    # for every second of the requested range.
+    # Env: CLIPPER_DOWNLOAD_TIMEOUT_BASE, CLIPPER_DOWNLOAD_TIMEOUT_PER_SECOND.
+    # Defaults 2m and 5s.
+    timeout_base: 2m
+    timeout_per_second: 5s
+
   # Transcription: every spoken word with its start and end time, for the
   # captions. Done by WhisperX on CPU. The defaults match the clipper base
   # image, where the models are installed and nothing is downloaded at job
