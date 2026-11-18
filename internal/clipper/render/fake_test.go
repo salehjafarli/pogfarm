@@ -4,6 +4,7 @@ package render
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/salehjafarli/pogfarm/internal/clipper/detect"
 	"github.com/salehjafarli/pogfarm/internal/clipper/download"
 	"github.com/salehjafarli/pogfarm/internal/clipper/layout"
 )
@@ -164,7 +166,7 @@ func TestRenderSteps(t *testing.T) {
 	if res.SourceWidth != 1920 || res.SourceHeight != 1080 {
 		t.Errorf("source size %dx%d", res.SourceWidth, res.SourceHeight)
 	}
-	if res.Detector != "off" || res.Detection.Webcam || res.Layout.Arrangement != layout.BlurFill {
+	if res.Detector != "off" || res.Detection.Face || res.Detection.Reason != layout.ReasonOff || res.Layout.Arrangement != layout.BlurFill {
 		t.Errorf("detection and layout: %q %+v %s", res.Detector, res.Detection, res.Layout.Arrangement)
 	}
 	if res.CaptionLines != 2 { // "hello chat look" and "at this"
@@ -196,8 +198,24 @@ func TestRenderSteps(t *testing.T) {
 	if got, _ := os.ReadFile(res.TranscriptPath); string(got) != string(wantTranscript) {
 		t.Errorf("transcript.json:\n%s", got)
 	}
-	if got, _ := os.ReadFile(filepath.Join(workDir, DetectionFile)); string(got) != "{\n  \"detector\": \"off\",\n  \"webcam\": false\n}\n" {
+	wantDetection := `{
+  "detector": "off",
+  "decision": {
+    "face": false,
+    "reason": "detector_off"
+  },
+  "layout": {
+    "source_width": 1920,
+    "source_height": 1080,
+    "arrangement": "blur_fill"
+  }
+}
+`
+	if got, _ := os.ReadFile(filepath.Join(workDir, DetectionFile)); string(got) != wantDetection {
 		t.Errorf("detection.json:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(workDir, DebugImageFile)); !os.IsNotExist(err) || res.DebugImage != "" {
+		t.Errorf("the off detector has no frame to draw: %v %q", err, res.DebugImage)
 	}
 	if ass, _ := os.ReadFile(res.CaptionPath); !strings.Contains(string(ass), "HELLO CHAT LOOK") {
 		t.Errorf("captions.ass lacks the words:\n%s", ass)
@@ -223,34 +241,106 @@ func TestRenderSteps(t *testing.T) {
 
 func TestRenderStack(t *testing.T) {
 	ft := newFakeTools(t, "", clipProbe)
-	region := layout.Region{X: 0.75, Y: 0.05, W: 0.2, H: 0.25}
-	r := fakeRenderer(t, ft, Options{Detector: fixedDetector{detection: layout.WebcamAt(region)}})
+	r := fakeRenderer(t, ft, Options{Detector: fixedDetector{detection: layout.FaceAt(cornerFace, layout.Stack, "steady")}})
 	workDir := t.TempDir()
 	res, err := r.Render(context.Background(), rangeReq, workDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Layout.Arrangement != layout.Stack || res.Detector != "fixed" || !res.Detection.Webcam {
+	if res.Layout.Arrangement != layout.Stack || res.Detector != "fixed" || !res.Detection.Face {
 		t.Errorf("got %s from %q %+v", res.Layout.Arrangement, res.Detector, res.Detection)
 	}
 	if graph := ft.args(t)[indexOf(ft.args(t), "-filter_complex")+1]; !strings.Contains(graph, "vstack") {
 		t.Errorf("filter graph is not a stack: %s", graph)
 	}
 	got, _ := os.ReadFile(filepath.Join(workDir, DetectionFile))
-	if !strings.Contains(string(got), `"webcam": true`) || !strings.Contains(string(got), `"x": 0.75`) {
+	for _, want := range []string{`"face": true`, `"arrangement": "stack"`, `"x": 0.85`, `"face_frame": {`, `"gameplay": {`, `"detail": "steady"`} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("detection.json lacks %s:\n%s", want, got)
+		}
+	}
+	if res.DebugImage != "" {
+		t.Errorf("a detector without frames gives no picture: %q", res.DebugImage)
+	}
+}
+
+func TestRenderFaceCrop(t *testing.T) {
+	ft := newFakeTools(t, "", clipProbe)
+	r := fakeRenderer(t, ft, Options{Detector: fixedDetector{detection: layout.FaceAt(bigFace, layout.FaceCrop, "big")}})
+	res, err := r.Render(context.Background(), rangeReq, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Layout.Arrangement != layout.FaceCrop || res.Layout.FaceFrame.IsZero() || !res.Layout.GameplayCrop.IsZero() {
+		t.Errorf("layout %+v", res.Layout)
+	}
+	if graph := ft.args(t)[indexOf(ft.args(t), "-filter_complex")+1]; !strings.HasPrefix(graph, "[0:v]crop=608:1080:608:0,scale=1080:1920,setsar=1[layout];") {
+		t.Errorf("filter graph is not a face crop: %s", graph)
+	}
+}
+
+func TestRenderDetectorErrorMeansNoFace(t *testing.T) {
+	ft := newFakeTools(t, "", clipProbe)
+	r := fakeRenderer(t, ft, Options{Detector: fixedDetector{err: errors.New("model crashed")}})
+	workDir := t.TempDir()
+	res, err := r.Render(context.Background(), rangeReq, workDir)
+	if err != nil {
+		t.Fatalf("a detector error must not fail the render: %v", err)
+	}
+	if res.Layout.Arrangement != layout.BlurFill || res.Detection.Face || res.Detection.Reason != layout.ReasonError ||
+		res.DetectionError != "model crashed" {
+		t.Errorf("got %s, %+v, %q", res.Layout.Arrangement, res.Detection, res.DetectionError)
+	}
+	if why := res.Why(); why != "detector failed: model crashed" {
+		t.Errorf("why: %q", why)
+	}
+	got, _ := os.ReadFile(filepath.Join(workDir, DetectionFile))
+	if !strings.Contains(string(got), `"error": "model crashed"`) || !strings.Contains(string(got), `"reason": "detector_error"`) {
 		t.Errorf("detection.json:\n%s", got)
 	}
 }
 
-func TestRenderDetectorErrorMeansNoWebcam(t *testing.T) {
+// reportDetector answers a report with sampled frames, as the real
+// detector does, so the render draws detect.jpg.
+type reportDetector struct{ rep detect.Report }
+
+func (reportDetector) Name() string { return "report" }
+
+func (d reportDetector) Detect(context.Context, string, time.Duration, string) (detect.Report, error) {
+	return d.rep, nil
+}
+
+func TestRenderDrawsDebugImage(t *testing.T) {
 	ft := newFakeTools(t, "", clipProbe)
-	r := fakeRenderer(t, ft, Options{Detector: fixedDetector{err: errors.New("model crashed")}})
-	res, err := r.Render(context.Background(), rangeReq, t.TempDir())
-	if err != nil {
-		t.Fatalf("a detector error must not fail the render: %v", err)
+	workDir := t.TempDir()
+	frame := filepath.Join(workDir, "detect", "frame-01.jpg")
+	rep := detect.Report{
+		Detection: layout.FaceAt(cornerFace, layout.Stack, "steady"),
+		Frames: []detect.Frame{{Time: 1.5, Image: detect.Image{Path: frame, Width: 1920, Height: 1080,
+			Faces: []detect.Face{{X: 1632, Y: 54, W: 96, H: 86.4, Confidence: 0.9, Kept: true, Group: 0}}}}},
+		Groups: []detect.Group{{Frames: []int{0}, Box: cornerFace, Steady: true}},
+		Chosen: 0, Steady: 1,
 	}
-	if res.Layout.Arrangement != layout.BlurFill || res.Detection.Webcam || res.DetectionError != "model crashed" {
-		t.Errorf("got %s, %+v, %q", res.Layout.Arrangement, res.Detection, res.DetectionError)
+	r := fakeRenderer(t, ft, Options{Detector: reportDetector{rep}})
+	res, err := r.Render(context.Background(), rangeReq, workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.DebugImage != filepath.Join(workDir, DebugImageFile) {
+		t.Errorf("debug image %q", res.DebugImage)
+	}
+	if _, err := os.Stat(res.DebugImage); err != nil {
+		t.Error(err)
+	}
+	var doc struct {
+		Frames     []detect.Frame `json:"frames"`
+		Chosen     int            `json:"chosen_group"`
+		DebugFrame *int           `json:"debug_frame"`
+	}
+	data, _ := os.ReadFile(filepath.Join(workDir, DetectionFile))
+	if err := json.Unmarshal(data, &doc); err != nil || len(doc.Frames) != 1 || doc.Frames[0].Faces[0].Confidence != 0.9 ||
+		doc.DebugFrame == nil || *doc.DebugFrame != 0 || doc.Chosen != 0 {
+		t.Errorf("detection.json (%v):\n%s", err, data)
 	}
 }
 

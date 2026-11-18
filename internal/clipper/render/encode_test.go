@@ -10,10 +10,10 @@ import (
 	"github.com/salehjafarli/pogfarm/internal/config"
 )
 
-// planFor lays out a 1920x1080 source with the default webcam share.
+// planFor lays out a 1920x1080 source with the default framing settings.
 func planFor(t *testing.T, d layout.Detection) layout.Result {
 	t.Helper()
-	l, err := layout.New(config.ClipperLayout{WebcamShare: 1.0 / 3})
+	l, err := layout.New(config.ClipperLayout{StackFaceShare: 0.45, CropFaceShare: 0.25, EyeLine: 1.0 / 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,8 +24,8 @@ func planFor(t *testing.T, d layout.Detection) layout.Result {
 	return res
 }
 
-// The tail of the command line after the filter graph is the same for both
-// arrangements.
+// The tail of the command line after the filter graph is the same for every
+// arrangement.
 const encodeTail = " -map [render_v] -map [render_a]" +
 	" -c:v libx264 -preset fast -crf 21 -maxrate 2000000 -bufsize 2000000 -profile:v high -pix_fmt yuv420p" +
 	" -fps_mode cfr -c:a aac -b:a 128000 -ar 48000 -ac 2 -movflags +faststart /w/clip.mp4"
@@ -34,6 +34,13 @@ const encodeHead = "-hide_banner -nostdin -loglevel error -nostats -progress pip
 
 const encodeFilterTail = ";[layout]ass=filename=/w/captions.ass,fps=30,format=yuv420p[render_v]" +
 	";[0:a:0]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[render_a]"
+
+// cornerFace is a webcam face in the top-right corner, 8% of the frame
+// high; bigFace fills the picture, 30% high.
+var (
+	cornerFace = layout.Box{X: 0.85, Y: 0.05, W: 0.05, H: 0.08}
+	bigFace    = layout.Box{X: 0.4, Y: 0.2, W: 0.15, H: 0.3}
+)
 
 func TestEncodeArgs(t *testing.T) {
 	tests := []struct {
@@ -44,7 +51,7 @@ func TestEncodeArgs(t *testing.T) {
 	}{
 		{
 			name:      "blur fill",
-			detection: layout.NoWebcam(),
+			detection: layout.NoFace(layout.ReasonNoFace, ""),
 			arrange:   layout.BlurFill,
 			want: encodeHead +
 				"[0:v]split=2[layout_bg_in][layout_fg_in];" +
@@ -55,13 +62,21 @@ func TestEncodeArgs(t *testing.T) {
 		},
 		{
 			name:      "stack",
-			detection: layout.WebcamAt(layout.Region{X: 0.75, Y: 0.05, W: 0.2, H: 0.25}),
+			detection: layout.FaceAt(cornerFace, layout.Stack, ""),
 			arrange:   layout.Stack,
 			want: encodeHead +
-				"[0:v]split=2[layout_cam_in][layout_game_in];" +
-				"[layout_cam_in]crop=384:226:1440:76,scale=1080:640,setsar=1[layout_cam];" +
+				"[0:v]split=2[layout_face_in][layout_game_in];" +
+				"[layout_face_in]crop=324:192:1518:24,scale=1080:640,setsar=1[layout_face];" +
 				"[layout_game_in]crop=910:1080:504:0,scale=1080:1280,setsar=1[layout_game];" +
-				"[layout_cam][layout_game]vstack=inputs=2,setsar=1[layout]" +
+				"[layout_face][layout_game]vstack=inputs=2,setsar=1[layout]" +
+				encodeFilterTail + encodeTail,
+		},
+		{
+			name:      "face crop",
+			detection: layout.FaceAt(bigFace, layout.FaceCrop, ""),
+			arrange:   layout.FaceCrop,
+			want: encodeHead +
+				"[0:v]crop=608:1080:608:0,scale=1080:1920,setsar=1[layout]" +
 				encodeFilterTail + encodeTail,
 		},
 	}
@@ -90,7 +105,7 @@ func TestEncodeArgs(t *testing.T) {
 func TestEncodeArgsEscapesCaptionPath(t *testing.T) {
 	args := encodeArgs(encodeSpec{
 		Input: "/w/source.mp4", Output: "/w/clip.mp4",
-		LayoutFilter: planFor(t, layout.NoWebcam()).Filter, CaptionPath: "/tmp/a b: it's/captions.ass",
+		LayoutFilter: planFor(t, layout.NoFace(layout.ReasonNoFace, "")).Filter, CaptionPath: "/tmp/a b: it's/captions.ass",
 		Preset: "fast", CRF: 21, FrameRate: 30, MaxRate: 2_000_000,
 	})
 	graph := args[indexOf(args, "-filter_complex")+1]

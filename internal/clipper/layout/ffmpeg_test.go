@@ -21,17 +21,19 @@ func TestFragmentRunsInFFmpeg(t *testing.T) {
 			t.Skipf("%s is not installed", tool)
 		}
 	}
-	l := newLayouter(t, 1.0/3)
+	l := newLayouter(t, defaults)
 	detections := []struct {
 		name string
 		d    Detection
 		want Arrangement
 	}{
-		{"stack", WebcamAt(corner), Stack},
-		{"stack clamped", WebcamAt(Region{X: 0.9, Y: -0.1, W: 0.3, H: 0.4}), Stack},
-		{"blur fill", NoWebcam(), BlurFill},
+		{"stack", FaceAt(corner, Stack, ""), Stack},
+		{"stack clamped", FaceAt(Box{X: 0.97, Y: -0.02, W: 0.05, H: 0.08}, Stack, ""), Stack},
+		{"face crop", FaceAt(big, FaceCrop, ""), FaceCrop},
+		{"face crop at the edge", FaceAt(Box{X: 0.9, Y: 0.6, W: 0.1, H: 0.25}, FaceCrop, ""), FaceCrop},
+		{"blur fill", NoFace(ReasonNoFace, ""), BlurFill},
 	}
-	for _, size := range [][2]int{{1920, 1080}, {1280, 720}} {
+	for _, size := range [][2]int{{1920, 1080}, {1280, 720}, {1920, 884}} {
 		dir := t.TempDir()
 		input := filepath.Join(dir, "source.mp4")
 		ffmpeg(t, "-f", "lavfi", "-i", fmt.Sprintf("testsrc=size=%dx%d:rate=10:duration=1", size[0], size[1]),

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/salehjafarli/pogfarm/internal/clipper/detect"
 	"github.com/salehjafarli/pogfarm/internal/clipper/layout"
 	"github.com/salehjafarli/pogfarm/internal/clipper/transcribe"
 	"github.com/salehjafarli/pogfarm/internal/config"
@@ -39,7 +40,8 @@ func (f *fakeTranscriber) Transcribe(ctx context.Context, input, _ string) (tran
 	return f.transcript, f.err
 }
 
-// fixedDetector answers the same detection, or error, for every clip.
+// fixedDetector answers the same detection, or error, for every clip, with
+// no frames behind it.
 type fixedDetector struct {
 	detection layout.Detection
 	err       error
@@ -47,19 +49,23 @@ type fixedDetector struct {
 
 func (fixedDetector) Name() string { return "fixed" }
 
-func (d fixedDetector) Detect(context.Context, string, string) (layout.Detection, error) {
-	return d.detection, d.err
+func (d fixedDetector) Detect(context.Context, string, time.Duration, string) (detect.Report, error) {
+	return detect.Report{Detection: d.detection, Chosen: -1}, d.err
 }
 
 // testConfig is the default clipper configuration as LoadClipperRender
-// gives it without a file, with the fastest encoder preset.
+// gives it without a file, with the fastest encoder preset and face
+// detection off, so a Renderer without a Detector option uses OffDetector:
+// detect-faces is not installed where the tests run.
 func testConfig(t *testing.T) config.Clipper {
 	t.Helper()
 	t.Setenv(config.EnvConfigPath, "")
+	t.Setenv("CLIPPER_WEBCAM_DETECTION_ENABLED", "")
 	cfg, err := config.LoadClipperRender("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	cfg.Render.Preset = "ultrafast"
+	cfg.WebcamDetection.Enabled = false
 	return *cfg
 }

@@ -187,13 +187,14 @@ func TestTranscriptPath(t *testing.T) {
 func TestFormatSummary(t *testing.T) {
 	res := render.Result{
 		Duration: 3 * time.Second, Width: 1080, Height: 1920, Size: 2_500_000,
-		Detector: "off", Layout: layout.Result{Arrangement: layout.BlurFill}, CaptionLines: 2,
+		Detector: "off", Detection: layout.NoFace(layout.ReasonOff, ""),
+		Layout: layout.Result{Arrangement: layout.BlurFill}, CaptionLines: 2,
 		Steps: []render.StepTime{{Name: "download", Took: time.Second}, {Name: "encode", Took: 2 * time.Second}},
 		Tools: map[string]string{"ffmpeg": "6.1"},
 	}
 	want := "" +
-		"arrangement   blur_fill\n" +
-		"webcam        none (detector off)\n" +
+		"arrangement   blur_fill: face detection off\n" +
+		"face          none (detector off)\n" +
 		"caption lines 2\n" +
 		"clip          3s, 1080x1920, 2.5 MB\n" +
 		"steps         download 1s, encode 2s (total 3s)\n" +
@@ -233,6 +234,31 @@ func TestRenderRefusesBeforeWork(t *testing.T) {
 	}
 	if code, _, errOut := runCmd(t, nil, "render", "--input", in, "-o", filepath.Join(dir, "nope", "x.mp4")); code != exitFail || !strings.Contains(errOut, "does not exist") {
 		t.Errorf("missing output directory: code %d, stderr %q", code, errOut)
+	}
+}
+
+// TestRenderRefusesWithoutDetector: with face detection on and its model
+// missing, clipper render stops before any work and says how to fix it.
+func TestRenderRefusesWithoutDetector(t *testing.T) {
+	t.Setenv(config.EnvConfigPath, "")
+	t.Setenv("CLIPPER_WEBCAM_DETECTION_ENABLED", "")
+	dir := t.TempDir()
+	model := filepath.Join(dir, "missing.onnx")
+	t.Setenv("CLIPPER_WEBCAM_DETECTION_MODEL", model)
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	code, stdout, stderr := runCmd(t, fakeTranscriber{}, "render", "--input", filepath.Join(dir, "stream.mp4"),
+		"-o", filepath.Join(dir, "clip.mp4"))
+	if code != exitFail {
+		t.Fatalf("code %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"face detection is enabled", model, "enabled: false"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+	if entries, _ := os.ReadDir(tmp); len(entries) != 0 {
+		t.Errorf("work started: %v", entries)
 	}
 }
 
@@ -278,7 +304,10 @@ func TestRenderCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfgFile := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(cfgFile, []byte("clipper:\n  render:\n    preset: ultrafast\n"), 0o600); err != nil {
+	t.Setenv("CLIPPER_WEBCAM_DETECTION_ENABLED", "")
+	// detect-faces is not installed in CI: face detection off, which uses
+	// the off detector and skips the startup check.
+	if err := os.WriteFile(cfgFile, []byte("clipper:\n  render:\n    preset: ultrafast\n  webcam_detection:\n    enabled: false\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -289,7 +318,7 @@ func TestRenderCommand(t *testing.T) {
 		if code != exitOK {
 			t.Fatalf("code %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
 		}
-		for _, want := range []string{"arrangement   blur_fill", "webcam        none (detector off)", "caption lines 2",
+		for _, want := range []string{"arrangement   blur_fill: face detection off", "face          none (detector off)", "caption lines 2",
 			"output        " + out + " (", "transcript    " + filepath.Join(dir, "my clip.json"), "work dir      "} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("summary lacks %q:\n%s", want, stdout)

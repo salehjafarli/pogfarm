@@ -24,19 +24,20 @@ func TestClipperLayoutDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Layout != defaultClipperLayout() || cfg.Layout.WebcamShare != 1.0/3 {
-		t.Errorf("layout default: got %+v, want webcam_share 1/3", cfg.Layout)
+	want := ClipperLayout{StackFaceShare: 0.45, CropFaceShare: 0.25, EyeLine: 1.0 / 3}
+	if cfg.Layout != want || defaultClipperLayout() != want {
+		t.Errorf("layout default: got %+v, want %+v", cfg.Layout, want)
 	}
 }
 
 func TestClipperLayoutFromFile(t *testing.T) {
 	cleanEnv(t)
-	cfg, err := LoadClipper(clipperFile(t, "  layout:\n    webcam_share: 0.4\n"))
+	cfg, err := LoadClipper(clipperFile(t, "  layout:\n    stack_face_share: 0.5\n    crop_face_share: 0.3\n    eye_line: 0.4\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Layout.WebcamShare != 0.4 {
-		t.Errorf("webcam_share: got %v, want 0.4", cfg.Layout.WebcamShare)
+	if want := (ClipperLayout{StackFaceShare: 0.5, CropFaceShare: 0.3, EyeLine: 0.4}); cfg.Layout != want {
+		t.Errorf("layout: got %+v, want %+v", cfg.Layout, want)
 	}
 }
 
@@ -54,22 +55,48 @@ func TestClipperLayoutExampleIsDefault(t *testing.T) {
 }
 
 func TestClipperLayoutInvalid(t *testing.T) {
-	for _, value := range []string{"0", "0.05", "0.95", "1", "-0.3", ".nan", ".inf"} {
-		t.Run(value, func(t *testing.T) {
-			cleanEnv(t)
-			_, err := LoadClipper(clipperFile(t, "  layout:\n    webcam_share: "+value+"\n"))
-			got := problemsOf(t, err)
-			if len(got) != 1 || !strings.Contains(got[0], "clipper.layout.webcam_share must be a number from 0.1 to 0.9") {
-				t.Errorf("problems: %q", got)
-			}
-		})
+	keys := []struct{ key, msg string }{
+		{"stack_face_share", "clipper.layout.stack_face_share must be a number from 0.05 to 0.9"},
+		{"crop_face_share", "clipper.layout.crop_face_share must be a number from 0.05 to 0.9"},
+		{"eye_line", "clipper.layout.eye_line must be a number from 0.1 to 0.9"},
+	}
+	for _, k := range keys {
+		for _, value := range []string{"0", "0.01", "0.95", "1", "-0.3", ".nan", ".inf"} {
+			t.Run(k.key+"="+value, func(t *testing.T) {
+				cleanEnv(t)
+				_, err := LoadClipper(clipperFile(t, "  layout:\n    "+k.key+": "+value+"\n"))
+				got := problemsOf(t, err)
+				if len(got) != 1 || !strings.Contains(got[0], k.msg) {
+					t.Errorf("problems: %q", got)
+				}
+			})
+		}
+	}
+}
+
+func TestClipperLayoutReportsEveryProblem(t *testing.T) {
+	if got := (ClipperLayout{}).Validate(); len(got) != 3 {
+		t.Errorf("want three problems, got %q", got)
 	}
 }
 
 func TestClipperLayoutBounds(t *testing.T) {
-	for _, share := range []float64{MinWebcamShare, 0.5, MaxWebcamShare} {
-		if p := (ClipperLayout{WebcamShare: share}).Validate(); p != nil {
-			t.Errorf("share %v should be accepted: %q", share, p)
+	for _, l := range []ClipperLayout{
+		{StackFaceShare: MinFaceShare, CropFaceShare: MinFaceShare, EyeLine: MinEyeLine},
+		{StackFaceShare: MaxFaceShare, CropFaceShare: MaxFaceShare, EyeLine: MaxEyeLine},
+	} {
+		if p := l.Validate(); p != nil {
+			t.Errorf("%+v should be accepted: %q", l, p)
 		}
+	}
+}
+
+// The old webcam_share key was replaced by the framing settings; a file
+// that still has it is refused like any unknown key.
+func TestClipperLayoutOldKeyRefused(t *testing.T) {
+	cleanEnv(t)
+	if _, err := LoadClipper(clipperFile(t, "  layout:\n    webcam_share: 0.4\n")); err == nil ||
+		!strings.Contains(err.Error(), "webcam_share") {
+		t.Errorf("got %v, want an error naming webcam_share", err)
 	}
 }

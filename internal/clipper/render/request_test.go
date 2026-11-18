@@ -75,7 +75,7 @@ func TestPermanentErrors(t *testing.T) {
 func TestSummary(t *testing.T) {
 	res := Result{
 		Duration: 3021 * time.Millisecond, Width: 1080, Height: 1920, Size: 1_234_567,
-		Detector: "off", Detection: layout.NoWebcam(),
+		Detector: "off", Detection: layout.NoFace(layout.ReasonOff, ""),
 		Layout:       layout.Result{Arrangement: layout.BlurFill},
 		CaptionLines: 4,
 		Steps: []StepTime{
@@ -86,8 +86,8 @@ func TestSummary(t *testing.T) {
 		Tools: map[string]string{"ffmpeg": "6.1.1"},
 	}
 	want := "" +
-		"arrangement   blur_fill\n" +
-		"webcam        none (detector off)\n" +
+		"arrangement   blur_fill: face detection off\n" +
+		"face          none (detector off)\n" +
 		"caption lines 4\n" +
 		"clip          3s, 1080x1920, 1.2 MB\n" +
 		"steps         download 1.2s, detect 0s, layout 30ms, transcribe 12.3s, caption 0s, encode 8s, verify 40ms (total 21.7s)\n" +
@@ -97,25 +97,36 @@ func TestSummary(t *testing.T) {
 	}
 }
 
-func TestSummaryWebcam(t *testing.T) {
-	region := layout.Region{X: 0.75, Y: 0.05, W: 0.2, H: 0.25}
+func TestSummaryFace(t *testing.T) {
+	box := layout.Box{X: 0.85, Y: 0.05, W: 0.05, H: 0.08}
+	detail := "steady face in 7 of 8 frames, 8.0% of the frame height, at most 20.0% for stack"
 	tests := []struct {
-		name string
-		res  Result
-		want string
+		name      string
+		res       Result
+		why, face string
 	}{
-		{"stack", Result{Detector: "yunet", Detection: layout.WebcamAt(region),
-			Layout: layout.Result{Arrangement: layout.Stack, WebcamCrop: layout.Crop{X: 1440, Y: 76, W: 384, H: 226}}},
-			"x=0.75 y=0.05 w=0.20 h=0.25, crop 384x226 at 1440,76 (detector yunet)"},
-		{"fallback", Result{Detector: "yunet", Detection: layout.WebcamAt(region),
+		{"stack", Result{Detector: "yunet", Detection: layout.FaceAt(box, layout.Stack, detail),
+			Layout: layout.Result{Arrangement: layout.Stack, FaceFrame: layout.Crop{X: 1518, Y: 24, W: 324, H: 192}}},
+			detail, "x=0.850 y=0.050 w=0.050 h=0.080, framed by 324x192 at 1518,24 (detector yunet)"},
+		{"fallback", Result{Detector: "yunet", Detection: layout.FaceAt(box, layout.Stack, detail),
 			Layout: layout.Result{Arrangement: layout.BlurFill, Fallback: "too small"}},
-			"found at x=0.75 y=0.05 w=0.20 h=0.25 but not used: too small (detector yunet)"},
-		{"error", Result{Detector: "yunet", DetectionError: "timed out", Layout: layout.Result{Arrangement: layout.BlurFill}},
-			"none (detector yunet failed: timed out)"},
+			"face not usable: too small", "x=0.850 y=0.050 w=0.050 h=0.080, not framed (detector yunet)"},
+		{"no face", Result{Detector: "yunet", Detection: layout.NoFace(layout.ReasonNoFace, "no face found in 8 frames"),
+			Layout: layout.Result{Arrangement: layout.BlurFill}},
+			"no steady face: no face found in 8 frames", "none (detector yunet)"},
+		{"ambiguous", Result{Detector: "yunet", Detection: layout.NoFace(layout.ReasonAmbiguous, "2 steady faces"),
+			Layout: layout.Result{Arrangement: layout.BlurFill}},
+			"ambiguous: 2 steady faces", "none (detector yunet)"},
+		{"error", Result{Detector: "yunet", Detection: layout.NoFace(layout.ReasonError, "timed out"), DetectionError: "timed out",
+			Layout: layout.Result{Arrangement: layout.BlurFill}},
+			"detector failed: timed out", "none (detector yunet)"},
 	}
 	for _, tt := range tests {
-		if got := tt.res.webcamSummary(); got != tt.want {
-			t.Errorf("%s:\n got %s\nwant %s", tt.name, got, tt.want)
+		if got := tt.res.Why(); got != tt.why {
+			t.Errorf("%s: why\n got %s\nwant %s", tt.name, got, tt.why)
+		}
+		if got := tt.res.faceSummary(); got != tt.face {
+			t.Errorf("%s: face\n got %s\nwant %s", tt.name, got, tt.face)
 		}
 	}
 }

@@ -1,0 +1,118 @@
+{
+  "detector": "yunet",
+  "model": "/models/yunet/face_detection_yunet_2023mar.onnx",
+  "images": [
+    {
+      "path": "/work/detect/frame-01.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1637.8,
+          "y": 63.5,
+          "w": 65.8,
+          "h": 82.1,
+          "confidence": 0.9347
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-02.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1641.7,
+          "y": 61.4,
+          "w": 62.0,
+          "h": 85.3,
+          "confidence": 0.8878
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-03.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1642.5,
+          "y": 60.3,
+          "w": 65.0,
+          "h": 84.9,
+          "confidence": 0.8839
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-04.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-05.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1641.4,
+          "y": 63.8,
+          "w": 65.6,
+          "h": 85.6,
+          "confidence": 0.8601
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-06.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1641.1,
+          "y": 62.8,
+          "w": 63.2,
+          "h": 82.2,
+          "confidence": 0.9248
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-07.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1640.5,
+          "y": 63.7,
+          "w": 63.0,
+          "h": 82.4,
+          "confidence": 0.9078
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-08.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1642.8,
+          "y": 61.2,
+          "w": 62.4,
+          "h": 83.4,
+          "confidence": 0.8628
+        }
+      ],
+      "error": null
+    }
+  ]
+}
