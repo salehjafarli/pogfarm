@@ -42,6 +42,9 @@ var allEnv = []string{
 	"POGFARM_UPLOAD_POLL_INTERVAL", "POGFARM_UPLOAD_ATTEMPT_TIMEOUT",
 	// Review decisions (review_test.go).
 	"POGFARM_REVIEW_UNDO_WINDOW",
+	// Clipper transcription (clipper_transcribe_test.go).
+	"CLIPPER_TRANSCRIBE_WHISPERX_PATH", "CLIPPER_TRANSCRIBE_FFMPEG_PATH", "CLIPPER_TRANSCRIBE_MODEL",
+	"CLIPPER_TRANSCRIBE_LANGUAGE", "CLIPPER_TRANSCRIBE_COMPUTE_TYPE", "CLIPPER_TRANSCRIBE_TIMEOUT",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
