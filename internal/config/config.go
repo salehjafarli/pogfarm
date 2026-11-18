@@ -189,6 +189,10 @@ type Clipper struct {
 	// Name identifies this clipper in pogfarm's queue and status output.
 	// It defaults to the machine's hostname.
 	Name string `yaml:"name" env:"CLIPPER_NAME"`
+
+	// Download configures how the source range is fetched. See
+	// clipper_download.go.
+	Download ClipperDownload `yaml:"download"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -227,6 +231,8 @@ func defaults() file {
 		},
 		Clipper: Clipper{
 			ScratchDir: "scratch",
+
+			Download: defaultClipperDownload(),
 		},
 	}
 }
@@ -487,6 +493,8 @@ func (c *Clipper) validate() []string {
 		problems = append(problems, fmt.Sprintf(
 			"clipper.name (CLIPPER_NAME) must be 1 to 63 letters, digits, dots, dashes or underscores, starting with a letter or digit: got %q", c.Name))
 	}
+
+	problems = append(problems, c.Download.validate()...)
 	return problems
 }
 

@@ -42,6 +42,9 @@ var allEnv = []string{
 	"POGFARM_UPLOAD_POLL_INTERVAL", "POGFARM_UPLOAD_ATTEMPT_TIMEOUT",
 	// Review decisions (review_test.go).
 	"POGFARM_REVIEW_UNDO_WINDOW",
+	// Clipper download step (clipper_download_test.go).
+	"CLIPPER_DOWNLOAD_TWITCH_DOWNLOADER_PATH", "CLIPPER_DOWNLOAD_FFMPEG_PATH", "CLIPPER_DOWNLOAD_FFPROBE_PATH",
+	"CLIPPER_DOWNLOAD_QUALITY", "CLIPPER_DOWNLOAD_TIMEOUT_BASE", "CLIPPER_DOWNLOAD_TIMEOUT_PER_SECOND",
 }
 
 // cleanEnv blanks every variable for the duration of the test. The loader
