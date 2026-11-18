@@ -1,0 +1,37 @@
+[Script Info]
+; Captions written by the pogfarm clipper (internal/clipper/caption).
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,6,2,2,60,60,560,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.42,0:00:00.54,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}And{\r} so, my
+Dialogue: 0,0:00:00.54,0:00:00.64,Default,,0,0,0,,And so, my
+Dialogue: 0,0:00:00.64,0:00:00.96,Default,,0,0,0,,And {\c&H35E1FF&\fscx110\fscy110}so,{\r} my
+Dialogue: 0,0:00:00.96,0:00:01.30,Default,,0,0,0,,And so, my
+Dialogue: 0,0:00:01.30,0:00:01.44,Default,,0,0,0,,And so, {\c&H35E1FF&\fscx110\fscy110}my{\r}
+Dialogue: 0,0:00:01.52,0:00:01.80,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}fellow{\r} Americans,
+Dialogue: 0,0:00:01.80,0:00:01.88,Default,,0,0,0,,fellow Americans,
+Dialogue: 0,0:00:01.88,0:00:02.56,Default,,0,0,0,,fellow {\c&H35E1FF&\fscx110\fscy110}Americans,{\r}
+Dialogue: 0,0:00:03.40,0:00:03.60,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}ask{\r} not what
+Dialogue: 0,0:00:03.60,0:00:03.66,Default,,0,0,0,,ask not what
+Dialogue: 0,0:00:03.66,0:00:03.88,Default,,0,0,0,,ask {\c&H35E1FF&\fscx110\fscy110}not{\r} what
+Dialogue: 0,0:00:03.88,0:00:03.96,Default,,0,0,0,,ask not what
+Dialogue: 0,0:00:03.96,0:00:04.14,Default,,0,0,0,,ask not {\c&H35E1FF&\fscx110\fscy110}what{\r}
+Dialogue: 0,0:00:04.22,0:00:04.38,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}your{\r} country can
+Dialogue: 0,0:00:04.38,0:00:04.44,Default,,0,0,0,,your country can
+Dialogue: 0,0:00:04.44,0:00:04.95,Default,,0,0,0,,your {\c&H35E1FF&\fscx110\fscy110}country{\r} can
+Dialogue: 0,0:00:04.95,0:00:05.35,Default,,0,0,0,,your country can
+Dialogue: 0,0:00:05.35,0:00:05.53,Default,,0,0,0,,your country {\c&H35E1FF&\fscx110\fscy110}can{\r}
+Dialogue: 0,0:00:05.61,0:00:05.75,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}do{\r} for
+Dialogue: 0,0:00:05.75,0:00:05.81,Default,,0,0,0,,do for
+Dialogue: 0,0:00:05.81,0:00:06.05,Default,,0,0,0,,do {\c&H35E1FF&\fscx110\fscy110}for{\r}
+Dialogue: 0,0:00:07.19,0:00:07.59,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}you.{\r}

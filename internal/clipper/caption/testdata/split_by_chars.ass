@@ -1,0 +1,25 @@
+[Script Info]
+; Captions written by the pogfarm clipper (internal/clipper/caption).
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,6,2,2,60,60,560,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.20,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}absolutely{\r}
+Dialogue: 0,0:00:00.25,0:00:00.45,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}no{\r} way
+Dialogue: 0,0:00:00.45,0:00:00.50,Default,,0,0,0,,no way
+Dialogue: 0,0:00:00.50,0:00:00.70,Default,,0,0,0,,no {\c&H35E1FF&\fscx110\fscy110}way{\r}
+Dialogue: 0,0:00:00.75,0:00:00.95,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}incomprehensibilities{\r}
+Dialogue: 0,0:00:01.00,0:00:01.20,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}is{\r} a word
+Dialogue: 0,0:00:01.20,0:00:01.25,Default,,0,0,0,,is a word
+Dialogue: 0,0:00:01.25,0:00:01.45,Default,,0,0,0,,is {\c&H35E1FF&\fscx110\fscy110}a{\r} word
+Dialogue: 0,0:00:01.45,0:00:01.50,Default,,0,0,0,,is a word
+Dialogue: 0,0:00:01.50,0:00:01.70,Default,,0,0,0,,is a {\c&H35E1FF&\fscx110\fscy110}word{\r}

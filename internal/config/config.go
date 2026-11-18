@@ -192,6 +192,9 @@ type Clipper struct {
 
 	// Transcribe configures speech to words with timestamps.
 	Transcribe ClipperTranscribe `yaml:"transcribe"`
+
+	// Caption configures the subtitle file burned into each clip.
+	Caption ClipperCaption `yaml:"caption"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -232,6 +235,8 @@ func defaults() file {
 			ScratchDir: "scratch",
 
 			Transcribe: defaultClipperTranscribe(),
+
+			Caption: defaultClipperCaption(),
 		},
 	}
 }
@@ -493,6 +498,7 @@ func (c *Clipper) validate() []string {
 			"clipper.name (CLIPPER_NAME) must be 1 to 63 letters, digits, dots, dashes or underscores, starting with a letter or digit: got %q", c.Name))
 	}
 	problems = append(problems, c.Transcribe.validate()...)
+	problems = append(problems, c.Caption.validate()...)
 	return problems
 }
 

@@ -1,0 +1,24 @@
+[Script Info]
+; Captions written by the pogfarm clipper (internal/clipper/caption).
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,6,2,2,60,60,560,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.20,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}wait{\r} for it
+Dialogue: 0,0:00:00.20,0:00:00.30,Default,,0,0,0,,wait for it
+Dialogue: 0,0:00:00.30,0:00:00.50,Default,,0,0,0,,wait {\c&H35E1FF&\fscx110\fscy110}for{\r} it
+Dialogue: 0,0:00:00.50,0:00:01.00,Default,,0,0,0,,wait for it
+Dialogue: 0,0:00:01.00,0:00:01.20,Default,,0,0,0,,wait for {\c&H35E1FF&\fscx110\fscy110}it{\r}
+Dialogue: 0,0:00:01.80,0:00:02.00,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}...{\r}
+Dialogue: 0,0:00:04.00,0:00:04.20,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}now{\r} go
+Dialogue: 0,0:00:04.20,0:00:04.30,Default,,0,0,0,,now go
+Dialogue: 0,0:00:04.30,0:00:04.50,Default,,0,0,0,,now {\c&H35E1FF&\fscx110\fscy110}go{\r}
