@@ -25,7 +25,7 @@ internal/api/       job contract shared by both: types, typed client, auth
 internal/config/    config file, env, secret files
 internal/runner/    run external tools with timeout and captured logs
 internal/pogfarm/   store, queue, server, source, scan, review, upload
-internal/clipper/   worker, download, layout, transcribe, caption, render
+internal/clipper/   render (the core), work (the job loop around it), and the steps render calls: download, detect, layout, transcribe, caption
 deploy/             Dockerfiles and compose files
 docs/               job contract and architecture notes
 ```

@@ -43,7 +43,7 @@ Every arrow in pogfarm is a background loop in its own goroutine, started from `
 
 ```
 cmd/pogfarm/                 wires every loop together in run(); main.go only wires, no logic
-cmd/clipper/                 render service entry point (not built yet)
+cmd/clipper/                 subcommands `render` (one clip by hand) and `work` (the service); no logic (not built yet)
 internal/api/                the job contract: types, routes, error codes, typed client, shared-secret auth
 internal/config/             config file + env vars + secret files for both binaries; one file per section
 internal/runner/             runs external tools as subprocesses: timeout, process-group kill, captured output
@@ -59,7 +59,9 @@ internal/pogfarm/review/     Telegram: Bot API client, bot (owner-only routing),
                              /status and /pending, title override by reply
 internal/pogfarm/status/     read-only farm statistics behind /status and /pending
 internal/pogfarm/upload/     uploader loop, Target interface, post text (title, description, tags); no real target yet
-internal/clipper/            worker, download, layout, transcribe, caption, render (not built yet)
+internal/clipper/render/     render core: Request in, finished clip and transcript out; knows nothing of pogfarm (not built yet)
+internal/clipper/work/       job loop around render: claim, heartbeats, scratch, upload (not built yet)
+internal/clipper/<step>/     download, detect, layout, transcribe, caption: the steps render calls (not built yet)
 deploy/                      Dockerfiles and compose files (not built yet)
 docs/                        architecture and job contract
 ```
@@ -68,6 +70,7 @@ docs/                        architecture and job contract
 
 - `internal/pogfarm` and `internal/clipper` never import each other. They meet only through `internal/api`.
 - `internal/api`, `internal/config` and `internal/runner` are shared and import neither service.
+- In the clipper, `work` imports `render`, never the other way round. `render` does not use the API client or job types: `work` turns a job into a `render.Request`.
 - `internal/config` must not import pogfarm packages: that would pull SQLite into the clipper binary.
 - Platform-specific code stays behind interfaces: `source.Source` for stream platforms, `upload.Target` for posting platforms, and a downloader interface in clipper once it is built. Nothing outside `source/twitch` mentions Twitch. Every streamer, VOD, candidate, job and clip carries a platform field.
 
