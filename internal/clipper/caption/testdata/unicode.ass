@@ -1,0 +1,24 @@
+[Script Info]
+; Captions written by the pogfarm clipper (internal/clipper/caption).
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,6,2,2,60,60,560,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.30,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}Grüße{\r} aus Köln
+Dialogue: 0,0:00:00.30,0:00:00.50,Default,,0,0,0,,Grüße {\c&H35E1FF&\fscx110\fscy110}aus{\r} Köln
+Dialogue: 0,0:00:00.50,0:00:00.90,Default,,0,0,0,,Grüße aus {\c&H35E1FF&\fscx110\fscy110}Köln{\r}
+Dialogue: 0,0:00:01.00,0:00:01.40,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}日本語{\r} です 🔥🔥
+Dialogue: 0,0:00:01.40,0:00:01.60,Default,,0,0,0,,日本語 {\c&H35E1FF&\fscx110\fscy110}です{\r} 🔥🔥
+Dialogue: 0,0:00:01.60,0:00:01.70,Default,,0,0,0,,日本語 です 🔥🔥
+Dialogue: 0,0:00:01.70,0:00:01.90,Default,,0,0,0,,日本語 です {\c&H35E1FF&\fscx110\fscy110}🔥🔥{\r}
+Dialogue: 0,0:00:02.00,0:00:02.40,Default,,0,0,0,,{\c&H35E1FF&\fscx110\fscy110}Ελληνικά{\r} שלום
+Dialogue: 0,0:00:02.40,0:00:02.80,Default,,0,0,0,,Ελληνικά {\c&H35E1FF&\fscx110\fscy110}שלום{\r}

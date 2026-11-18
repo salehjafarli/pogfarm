@@ -353,3 +353,56 @@ clipper:
     # Limit for each tool run, the audio extraction and WhisperX.
     # Env: CLIPPER_TRANSCRIBE_TIMEOUT. Default 10m.
     timeout: 10m
+
+  # Captions: the spoken words, burned into the clip a few at a time, with
+  # the word being spoken highlighted. Sizes and positions are pixels of the
+  # 1080x1920 output frame. Colours are "#RRGGBB" (converted to the
+  # subtitle format's &HAABBGGRR internally).
+  caption:
+    # Font name as fontconfig knows it; the clipper image ships Montserrat
+    # ExtraBold. A missing font falls back to another one.
+    # Env: CLIPPER_CAPTION_FONT. Default "Montserrat ExtraBold".
+    font: "Montserrat ExtraBold"
+
+    # Font size in pixels of the 1920-pixel-high frame, 10 to 400.
+    # Env: CLIPPER_CAPTION_FONT_SIZE. Default 80.
+    font_size: 80
+
+    # Colour of the words and of the word being spoken.
+    # Env: CLIPPER_CAPTION_PRIMARY_COLOR, CLIPPER_CAPTION_HIGHLIGHT_COLOR.
+    # Defaults "#FFFFFF" (white) and "#FFE135" (yellow).
+    primary_color: "#FFFFFF"
+    highlight_color: "#FFE135"
+
+    # Size of the word being spoken, in percent of the others, 100 to 200.
+    # 100 turns the scaling off. Env: CLIPPER_CAPTION_HIGHLIGHT_SCALE.
+    # Default 110.
+    highlight_scale: 110
+
+    # Outline width in pixels (0 to 50) and its colour. The drop shadow
+    # uses the outline colour at half opacity; shadow is its offset in
+    # pixels, 0 to 50, and 0 turns it off.
+    # Env: CLIPPER_CAPTION_OUTLINE, CLIPPER_CAPTION_OUTLINE_COLOR,
+    # CLIPPER_CAPTION_SHADOW. Defaults 6, "#000000" and 2.
+    outline: 6
+    outline_color: "#000000"
+    shadow: 2
+
+    # Distance from the bottom of the frame to the bottom of the captions,
+    # in pixels. The default puts them in the lower third, above the
+    # buttons and descriptions short-video apps draw over the bottom of
+    # the video. Env: CLIPPER_CAPTION_MARGIN_BOTTOM. Default 560.
+    margin_bottom: 560
+
+    # A phrase, the words shown together, holds at most max_words words
+    # and max_chars characters (spaces included; a longer single word is a
+    # phrase of its own). A pause longer than max_gap starts a new phrase.
+    # Env: CLIPPER_CAPTION_MAX_WORDS, CLIPPER_CAPTION_MAX_CHARS,
+    # CLIPPER_CAPTION_MAX_GAP. Defaults 3, 18 and 500ms.
+    max_words: 3
+    max_chars: 18
+    max_gap: 500ms
+
+    # Write the captions in capital letters.
+    # Env: CLIPPER_CAPTION_UPPERCASE. Default true.
+    uppercase: true

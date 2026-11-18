@@ -198,6 +198,9 @@ type Clipper struct {
 	Download ClipperDownload `yaml:"download"`
 	// Transcribe configures speech to words with timestamps.
 	Transcribe ClipperTranscribe `yaml:"transcribe"`
+
+	// Caption configures the subtitle file burned into each clip.
+	Caption ClipperCaption `yaml:"caption"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -240,6 +243,8 @@ func defaults() file {
 			Layout:     defaultClipperLayout(),
 			Download:   defaultClipperDownload(),
 			Transcribe: defaultClipperTranscribe(),
+
+			Caption: defaultClipperCaption(),
 		},
 	}
 }
@@ -504,6 +509,7 @@ func (c *Clipper) validate() []string {
 
 	problems = append(problems, c.Download.validate()...)
 	problems = append(problems, c.Transcribe.validate()...)
+	problems = append(problems, c.Caption.validate()...)
 	return problems
 }
 
