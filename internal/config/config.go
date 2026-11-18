@@ -193,6 +193,11 @@ type Clipper struct {
 	// Layout configures how the source is arranged in the vertical clip.
 	// See clipper_layout.go.
 	Layout ClipperLayout `yaml:"layout"`
+	// Download configures how the source range is fetched. See
+	// clipper_download.go.
+	Download ClipperDownload `yaml:"download"`
+	// Transcribe configures speech to words with timestamps.
+	Transcribe ClipperTranscribe `yaml:"transcribe"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -232,7 +237,9 @@ func defaults() file {
 		Clipper: Clipper{
 			ScratchDir: "scratch",
 
-			Layout: defaultClipperLayout(),
+			Layout:     defaultClipperLayout(),
+			Download:   defaultClipperDownload(),
+			Transcribe: defaultClipperTranscribe(),
 		},
 	}
 }
@@ -494,6 +501,9 @@ func (c *Clipper) validate() []string {
 			"clipper.name (CLIPPER_NAME) must be 1 to 63 letters, digits, dots, dashes or underscores, starting with a letter or digit: got %q", c.Name))
 	}
 	problems = append(problems, c.Layout.validate()...)
+
+	problems = append(problems, c.Download.validate()...)
+	problems = append(problems, c.Transcribe.validate()...)
 	return problems
 }
 
