@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Sets up a Mac to run `clipper render` natively, without Docker.
+# Sets up a Mac to run `clipper render` natively, without Docker. macOS only;
+# other systems need their own setup script.
 #
 # It installs the same tools the clipper image has, at the same pinned
 # versions where macOS builds exist:
@@ -129,7 +130,9 @@ fetch() {
 # ---------------------------------------------------------------------------
 # Checks.
 
-[ "$(uname -s)" = Darwin ] || die "this script is for macOS; on Linux use the clipper image (deploy/README.md)"
+# macOS only. Other systems get their own script (none exists yet for
+# Windows); on Linux the clipper image has every tool.
+[ "$(uname -s)" = Darwin ] || die "this script is for macOS only (this system is $(uname -s)); on Linux use the clipper image (deploy/README.md)"
 case "$(uname -m)" in
   arm64) TWITCH_ASSET=MacOSArm64; TWITCH_SHA=$TWITCHDOWNLOADER_ARM64_SHA ;;
   x86_64) TWITCH_ASSET=MacOS-x64; TWITCH_SHA=$TWITCHDOWNLOADER_X64_SHA ;;
