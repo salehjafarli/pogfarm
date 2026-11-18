@@ -18,7 +18,7 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -39,6 +39,11 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+      # The clipper's tests run ffmpeg and ffprobe when they are installed and
+      # skip those parts otherwise. Installing them here makes CI run them.
+      - name: Install ffmpeg
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
 
       - name: Test
         run: go test -race ./...
