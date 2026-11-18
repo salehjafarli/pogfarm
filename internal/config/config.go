@@ -193,6 +193,8 @@ type Clipper struct {
 	// Download configures how the source range is fetched. See
 	// clipper_download.go.
 	Download ClipperDownload `yaml:"download"`
+	// Transcribe configures speech to words with timestamps.
+	Transcribe ClipperTranscribe `yaml:"transcribe"`
 }
 
 // file is the layout of the config file: one section per binary, so a single
@@ -232,7 +234,8 @@ func defaults() file {
 		Clipper: Clipper{
 			ScratchDir: "scratch",
 
-			Download: defaultClipperDownload(),
+			Download:   defaultClipperDownload(),
+			Transcribe: defaultClipperTranscribe(),
 		},
 	}
 }
@@ -495,6 +498,7 @@ func (c *Clipper) validate() []string {
 	}
 
 	problems = append(problems, c.Download.validate()...)
+	problems = append(problems, c.Transcribe.validate()...)
 	return problems
 }
 
