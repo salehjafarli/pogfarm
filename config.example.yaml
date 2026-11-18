@@ -286,3 +286,38 @@ clipper:
   # pogfarm.api_secret.
   # Env: CLIPPER_API_SECRET or CLIPPER_API_SECRET_FILE.
   api_secret: "change-me"
+
+  # Transcription: every spoken word with its start and end time, for the
+  # captions. Done by WhisperX on CPU. The defaults match the clipper base
+  # image, where the models are installed and nothing is downloaded at job
+  # time.
+  transcribe:
+    # The WhisperX and ffmpeg programs: a path, or a name looked up in PATH.
+    # Env: CLIPPER_TRANSCRIBE_WHISPERX_PATH, CLIPPER_TRANSCRIBE_FFMPEG_PATH.
+    # Defaults "whisperx" and "ffmpeg".
+    whisperx_path: "whisperx"
+    ffmpeg_path: "ffmpeg"
+
+    # Whisper model: a directory holding a CTranslate2 (faster-whisper)
+    # model, or a model name already in the Hugging Face cache.
+    # Env: CLIPPER_TRANSCRIBE_MODEL.
+    # Default "/models/whisper/faster-whisper-small", the model in the image.
+    model: "/models/whisper/faster-whisper-small"
+
+    # Whisper language code of the speech. Required; there is no language
+    # detection. Env: CLIPPER_TRANSCRIBE_LANGUAGE. Default "en".
+    language: "en"
+
+    # Languages whose alignment model is installed (the image has English
+    # only). Aligned words get their own timing; for any other language each
+    # sentence's time is split evenly across its words, and a warning is
+    # logged. File only. Default [en].
+    aligned_languages: ["en"]
+
+    # CTranslate2 compute type: int8, float32 or default (float32 on CPU).
+    # Env: CLIPPER_TRANSCRIBE_COMPUTE_TYPE. Default "int8".
+    compute_type: "int8"
+
+    # Limit for each tool run, the audio extraction and WhisperX.
+    # Env: CLIPPER_TRANSCRIBE_TIMEOUT. Default 10m.
+    timeout: 10m
