@@ -98,6 +98,8 @@
 //     uses another font.
 //
 // The clipper base image (deploy/clipper-base.Dockerfile) has all of them.
+// On a Mac, scripts/setup-clipper-macos.sh installs the same tools natively
+// and writes the settings that point the clipper at them.
 // The command needs no pogfarm address or secret: it loads the config with
 // config.LoadClipperRender. From a file already on disk:
 //
