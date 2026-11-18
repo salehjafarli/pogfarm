@@ -18,10 +18,13 @@
 //  1. download: the exact range, by package download, from the platform or
 //     a local file (source.mp4, or the input's own name when it is copied
 //     whole);
-//  2. detect: where the streamer's webcam is, by a Detector, written to
-//     detection.json;
+//  2. detect: where the streamer's face is and which arrangement it calls
+//     for, by a Detector (package detect), from frames it samples into
+//     detect/;
 //  3. layout: the arrangement for the source's picture size and the
-//     detection, by package layout;
+//     detection, by package layout; then detection.json (every frame's
+//     faces, the decision and why, the crops) and detect.jpg (a frame with
+//     the faces and crops drawn on it) are written;
 //  4. transcribe: the words with times, by a transcribe.Transcriber
 //     (WhisperX by default), written to transcript.json;
 //  5. caption: the ASS subtitle file, by package caption (captions.ass);
@@ -31,16 +34,28 @@
 // Result carries the paths, the transcript, the clip's duration, picture
 // size and file size, every decision (detector, detection, arrangement,
 // crops, fallback reason, caption lines), the time per step and the ffmpeg
-// version. Result.Summary formats it for people.
+// version. Result.Summary formats it for people, and Result.Why says in
+// words why the arrangement was chosen.
 //
-// # Webcam detection
+// # Face detection
 //
 // The Detector is chosen once, when the Renderer is built, from
-// clipper.webcam_detection.enabled. Only OffDetector exists so far: it
-// answers "no webcam" for every clip, so every clip uses blur fill. Until
-// the real detector is built (#59), both values of the setting select it,
-// and NewDetector logs that. A detector error never fails a render: it is
-// logged, recorded in Result.DetectionError and treated as no webcam.
+// clipper.webcam_detection.enabled: the real one (detect.Detector, which
+// runs detect-faces) when true, OffDetector when false. OffDetector answers
+// "no face, detector off" for every clip, so every clip uses blur fill.
+// New does not check that the real detector is installed; callers run
+// detect.Check first, which clipper render does before anything else.
+//
+// A detector error or timeout never fails a render: it is logged, recorded
+// in Result.DetectionError and treated as no face (layout.ReasonError), and
+// the clip uses blur fill. Only a cancelled context stops the render there.
+//
+// detect.jpg is drawn with ffmpeg's drawbox filter on the frame of the
+// report's DebugFrame: the face crop in cyan, the stack's gameplay crop in
+// magenta, every face found in yellow (kept) or red (below the confidence
+// or size rules), and the face chosen (its median box) in lime. Confidence
+// numbers are not drawn, since drawtext needs fontconfig; they are in
+// detection.json. A failure to draw is only logged.
 //
 // # The final encode
 //
@@ -95,6 +110,9 @@
 //   - WhisperX with its model (clipper.transcribe.model) and, for word
 //     timing, the alignment model of the language;
 //   - TwitchDownloaderCLI 1.56.5, only for --vod;
+//   - detect-faces with OpenCV and the YuNet model, unless face detection is
+//     switched off (clipper.webcam_detection.enabled: false); without them
+//     the command refuses to start;
 //   - the caption font (Montserrat ExtraBold by default); without it libass
 //     uses another font.
 //
@@ -121,13 +139,18 @@
 // line of the summary. It then holds:
 //
 //	source.mp4       the downloaded range (or the input's copy)
-//	detection.json   the detector's answer: {"detector":"off","webcam":false}
+//	detect/          the frames the face detector looked at
+//	detect.jpg       one of them with every face, the face chosen and the
+//	                 crops drawn on it
+//	detection.json   every frame's faces (pixels, confidence), the groups,
+//	                 the decision and why, and the crops used
 //	audio.wav        the audio WhisperX read
 //	whisperx/        WhisperX's own output
 //	captions.ass     the subtitle file burned in; open it with the source in
 //	                 a player that reads ASS (mpv) to check the timing
 //	transcript.json and clip.mp4 have been moved to the output.
 //
-// When a clip looks wrong, check detection.json and the arrangement in the
-// summary for the layout, and captions.ass for the captions.
+// When a clip looks wrong, check the arrangement line of the summary,
+// detect.jpg and detection.json for the layout, and captions.ass for the
+// captions. The framing settings (clipper.layout) are tuned from detect.jpg.
 package render

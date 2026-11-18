@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/salehjafarli/pogfarm/internal/clipper/detect"
 	"github.com/salehjafarli/pogfarm/internal/clipper/layout"
 	"github.com/salehjafarli/pogfarm/internal/runner"
 )
@@ -77,14 +78,44 @@ func streamCodecs(t *testing.T, path string) map[string]string {
 	return got
 }
 
+// cornerFinder stands in for detect-faces, which CI does not have: it
+// answers a webcam face in the top-right corner of every frame, 8% of the
+// height, and a face elsewhere that moves from frame to frame, as faces in
+// a game do.
+type cornerFinder struct{}
+
+func (cornerFinder) Name() string { return "corner" }
+
+func (cornerFinder) FindFaces(_ context.Context, images []string) ([]detect.Image, error) {
+	out := make([]detect.Image, len(images))
+	for i, p := range images {
+		out[i] = detect.Image{Path: p, Width: 1920, Height: 1080, Faces: []detect.Face{
+			{X: 1632, Y: 54, W: 96, H: 86, Confidence: 0.92},
+			{X: 200 + 150*float64(i), Y: 500, W: 90, H: 120, Confidence: 0.8},
+			{X: 900, Y: 900, W: 40, H: 50, Confidence: 0.55},
+		}}
+	}
+	return out, nil
+}
+
 // TestRenderReal renders 1s to 4s of a generated 6-second 1920x1080 file
 // with the real local-file downloader, layout, caption writer and ffmpeg,
-// once per arrangement. The work directory's name needs every kind of
-// filter graph escaping, so the caption path is checked by ffmpeg itself.
+// once per arrangement, the detector faked. The work directory's name needs
+// every kind of filter graph escaping, so the caption path is checked by
+// ffmpeg itself. The "detected" case runs the real detect.Detector, whose
+// frames ffmpeg extracts, with cornerFinder in place of detect-faces, and
+// checks detect.jpg and detection.json.
 func TestRenderReal(t *testing.T) {
 	needTools(t)
 	input := filepath.Join(t.TempDir(), "stream.mp4")
 	generateSource(t, input, 6)
+
+	detCfg := testConfig(t).WebcamDetection
+	detCfg.FFmpegPath = "ffmpeg"
+	detected, err := detect.New(detCfg, detect.Options{Finder: cornerFinder{}})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tt := range []struct {
 		name     string
@@ -92,7 +123,9 @@ func TestRenderReal(t *testing.T) {
 		want     layout.Arrangement
 	}{
 		{"blur fill", nil, layout.BlurFill},
-		{"stack", fixedDetector{detection: layout.WebcamAt(layout.Region{X: 0.7, Y: 0.05, W: 0.25, H: 0.3})}, layout.Stack},
+		{"stack", fixedDetector{detection: layout.FaceAt(cornerFace, layout.Stack, "")}, layout.Stack},
+		{"face crop", fixedDetector{detection: layout.FaceAt(bigFace, layout.FaceCrop, "")}, layout.FaceCrop},
+		{"detected", detected, layout.Stack},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := testConfig(t)
@@ -110,7 +143,7 @@ func TestRenderReal(t *testing.T) {
 				t.Fatal(err)
 			}
 			if res.Layout.Arrangement != tt.want {
-				t.Errorf("arrangement %s, want %s", res.Layout.Arrangement, tt.want)
+				t.Errorf("arrangement %s (%s), want %s", res.Layout.Arrangement, res.Why(), tt.want)
 			}
 			if res.Width != 1080 || res.Height != 1920 {
 				t.Errorf("picture %dx%d", res.Width, res.Height)
@@ -147,7 +180,60 @@ func TestRenderReal(t *testing.T) {
 					t.Errorf("ffprobe %s: got %q, want %q (all: %v)", k, got[k], v, got)
 				}
 			}
+			if tt.name == "detected" {
+				checkDetected(t, res, workDir)
+			}
 			t.Logf("summary:\n%s", res.Summary())
 		})
+	}
+}
+
+// checkDetected checks what the real detector left: eight frames, the
+// corner face chosen, detect.jpg at the source's size and detection.json
+// with every frame's faces.
+func checkDetected(t *testing.T, res Result, workDir string) {
+	t.Helper()
+	if res.Detector != "corner" || !res.Detection.Face || res.Detection.Arrangement != layout.Stack {
+		t.Errorf("detection %q %+v", res.Detector, res.Detection)
+	}
+	if b := res.Detection.Box; b.X < 0.84 || b.X > 0.86 || b.H < 0.07 || b.H > 0.09 {
+		t.Errorf("box %+v, want the corner face", b)
+	}
+	if res.DebugImage != filepath.Join(workDir, DebugImageFile) {
+		t.Fatalf("debug image %q", res.DebugImage)
+	}
+	got := streamCodecs(t, res.DebugImage)
+	if got["video"] != "mjpeg" || got["size"] != "1920x1080" {
+		t.Errorf("detect.jpg: %v", got)
+	}
+	var doc struct {
+		Detector string         `json:"detector"`
+		Frames   []detect.Frame `json:"frames"`
+		Groups   []detect.Group `json:"groups"`
+		Chosen   int            `json:"chosen_group"`
+		Decision struct {
+			Face        bool   `json:"face"`
+			Arrangement string `json:"arrangement"`
+			Detail      string `json:"detail"`
+		} `json:"decision"`
+		Layout struct {
+			FaceFrame *layout.Crop `json:"face_frame"`
+		} `json:"layout"`
+	}
+	data, err := os.ReadFile(filepath.Join(workDir, DetectionFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Detector != "corner" || len(doc.Frames) != 8 || len(doc.Frames[0].Faces) != 3 || !doc.Decision.Face ||
+		doc.Decision.Arrangement != "stack" || doc.Layout.FaceFrame == nil || doc.Chosen < 0 || !doc.Groups[doc.Chosen].Steady {
+		t.Errorf("detection.json:\n%s", data)
+	}
+	for _, f := range doc.Frames {
+		if _, err := os.Stat(f.Path); err != nil {
+			t.Errorf("frame: %v", err)
+		}
 	}
 }

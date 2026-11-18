@@ -1,0 +1,102 @@
+{
+  "detector": "yunet",
+  "model": "/models/yunet/face_detection_yunet_2023mar.onnx",
+  "images": [
+    {
+      "path": "/work/detect/frame-01.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1643.7,
+          "y": 57.8,
+          "w": 65.9,
+          "h": 85.2,
+          "confidence": 0.8985
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-02.jpg",
+      "width": 0,
+      "height": 0,
+      "faces": [],
+      "error": "cannot read image"
+    },
+    {
+      "path": "/work/detect/frame-03.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1637.8,
+          "y": 61.7,
+          "w": 62.0,
+          "h": 83.0,
+          "confidence": 0.8596
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-04.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1639.6,
+          "y": 58.3,
+          "w": 64.7,
+          "h": 85.0,
+          "confidence": 0.9414
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-05.jpg",
+      "width": 0,
+      "height": 0,
+      "faces": [],
+      "error": "cannot read image"
+    },
+    {
+      "path": "/work/detect/frame-06.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1639.4,
+          "y": 61.1,
+          "w": 65.0,
+          "h": 84.2,
+          "confidence": 0.9093
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-07.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-08.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1636.9,
+          "y": 60.3,
+          "w": 65.8,
+          "h": 83.1,
+          "confidence": 0.9281
+        }
+      ],
+      "error": null
+    }
+  ]
+}

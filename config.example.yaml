@@ -287,14 +287,25 @@ clipper:
   # Env: CLIPPER_API_SECRET or CLIPPER_API_SECRET_FILE.
   api_secret: "change-me"
 
-  # How the 16:9 source is arranged in the 1080x1920 clip. With a webcam
-  # found, the webcam is stacked above a centre slice of the gameplay;
-  # without one, the whole frame sits over a blurred copy of itself.
+  # How the 16:9 source is arranged in the 1080x1920 clip, from the face
+  # detection (webcam_detection below). A small steady face: stack, a band
+  # framed on the face (one third of the height) above a centre slice of
+  # the gameplay. A face filling the picture: face crop, the whole clip
+  # framed on the face. No face, or an ambiguous one: blur fill, the whole
+  # frame over a blurred copy of itself.
+  # The face is placed relative to its own size, so every clip looks alike
+  # whatever the source. Tune these from detect.jpg (clipper render
+  # --keep-work). File only, no env.
   layout:
-    # Share of the clip's height taken by the webcam band of the stack,
-    # from 0.1 to 0.9; the gameplay gets the rest. File only, no env.
-    # Default one third.
-    webcam_share: 0.3333333333333333
+    # The face's height as a share of the stack's face band, 0.05 to 0.9.
+    # Default 0.45.
+    stack_face_share: 0.45
+    # The face's height as a share of the whole clip in face crop, 0.05 to
+    # 0.9. Default 0.25.
+    crop_face_share: 0.25
+    # Where the eyes sit, as a share of the framed area's height from its
+    # top, 0.1 to 0.9, in both arrangements. Default one third.
+    eye_line: 0.3333333333333333
 
   # How the clipper fetches the part of the stream a render asks for.
   download:
@@ -436,10 +447,50 @@ clipper:
     timeout_base: 2m
     timeout_per_second: 10s
 
-  # Webcam detection: where the streamer's webcam is in each clip, so it can
-  # be stacked above the gameplay. No detector is built yet (#59): both
-  # values use the off detector, and every clip uses the blur fill layout.
-  # false will keep it off once the detector exists.
-  # Env: CLIPPER_WEBCAM_DETECTION_ENABLED. Default true.
+  # Face detection: finds the streamer's face in each clip, which picks the
+  # layout above. Frames are sampled across the clip and the detect-faces
+  # program (YuNet through OpenCV, in the clipper image) looks for faces in
+  # them. A face found at roughly the same place in most frames is steady;
+  # faces in the game move or disappear. Detection never fails a clip: an
+  # error or a timeout gives blur fill.
   webcam_detection:
+    # false uses blur fill for every clip and never looks for the program or
+    # the model. When true, the clipper refuses to start unless detect-faces
+    # runs with its model.
+    # Env: CLIPPER_WEBCAM_DETECTION_ENABLED. Default true.
     enabled: true
+    # The detect-faces program: a path, or a name looked up in PATH.
+    # Env: CLIPPER_WEBCAM_DETECTION_DETECT_FACES_PATH. Default "detect-faces".
+    detect_faces_path: "detect-faces"
+    # The YuNet model detect-faces loads.
+    # Env: CLIPPER_WEBCAM_DETECTION_MODEL.
+    # Default "/models/yunet/face_detection_yunet_2023mar.onnx" (the image's).
+    model: "/models/yunet/face_detection_yunet_2023mar.onnx"
+    # ffmpeg, which extracts the frames.
+    # Env: CLIPPER_WEBCAM_DETECTION_FFMPEG_PATH. Default "ffmpeg".
+    ffmpeg_path: "ffmpeg"
+    # The whole detection of one clip is stopped after this, and the clip
+    # uses blur fill.
+    # Env: CLIPPER_WEBCAM_DETECTION_TIMEOUT. Default 1m.
+    timeout: 1m
+    # Frames sampled, spread evenly across the clip, 2 to 32.
+    # Env: CLIPPER_WEBCAM_DETECTION_FRAMES. Default 8.
+    frames: 8
+    # The rules below are file only, no env.
+    # Faces below this detector confidence (0 to 1) are ignored. Default 0.7.
+    min_confidence: 0.7
+    # Faces shorter than this share of the frame height are ignored.
+    # Default 0.03.
+    min_face_height: 0.03
+    # A face is steady when found in at least this share of the frames.
+    # Default 0.6 (5 of 8).
+    steady_share: 0.6
+    # How far a face may move between frames and still be the same face, in
+    # face heights. Default 0.5.
+    max_movement: 0.5
+    # With several steady faces, the largest must be this many times taller
+    # than the next to be the streamer's; otherwise blur fill. Default 1.5.
+    dominance: 1.5
+    # A steady face taller than this share of the frame height gets face
+    # crop; a smaller one gets stack. Default 0.2.
+    face_crop_height: 0.2

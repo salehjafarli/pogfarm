@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/salehjafarli/pogfarm/internal/clipper/detect"
 	"github.com/salehjafarli/pogfarm/internal/clipper/render"
 	"github.com/salehjafarli/pogfarm/internal/config"
 )
@@ -45,6 +46,10 @@ func runRender(ctx context.Context, f renderFlags, e env) (err error) {
 
 	cfg, err := config.LoadClipperRender(f.configPath)
 	if err != nil {
+		return err
+	}
+	// With face detection on, refuse to start without a working detector.
+	if err := detect.Check(ctx, cfg.WebcamDetection); err != nil {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(e.stderr, nil))

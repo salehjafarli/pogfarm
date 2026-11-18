@@ -1,0 +1,182 @@
+{
+  "detector": "yunet",
+  "model": "/models/yunet/face_detection_yunet_2023mar.onnx",
+  "images": [
+    {
+      "path": "/work/detect/frame-01.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1702.9,
+          "y": 896.6,
+          "w": 10.4,
+          "h": 13.6,
+          "confidence": 0.909
+        },
+        {
+          "x": 900.1,
+          "y": 403.5,
+          "w": 68.3,
+          "h": 89.0,
+          "confidence": 0.5605
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-02.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1699.0,
+          "y": 897.2,
+          "w": 10.8,
+          "h": 13.7,
+          "confidence": 0.9159
+        },
+        {
+          "x": 898.0,
+          "y": 397.5,
+          "w": 68.0,
+          "h": 91.1,
+          "confidence": 0.5573
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-03.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1698.7,
+          "y": 903.0,
+          "w": 10.9,
+          "h": 16.5,
+          "confidence": 0.8933
+        },
+        {
+          "x": 900.0,
+          "y": 403.6,
+          "w": 70.0,
+          "h": 92.0,
+          "confidence": 0.6035
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-04.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1699.4,
+          "y": 903.3,
+          "w": 13.5,
+          "h": 14.9,
+          "confidence": 0.9177
+        },
+        {
+          "x": 897.6,
+          "y": 397.9,
+          "w": 71.0,
+          "h": 89.6,
+          "confidence": 0.5934
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-05.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1697.2,
+          "y": 898.0,
+          "w": 10.5,
+          "h": 15.6,
+          "confidence": 0.9422
+        },
+        {
+          "x": 904.0,
+          "y": 403.5,
+          "w": 71.9,
+          "h": 91.8,
+          "confidence": 0.5644
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-06.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1703.5,
+          "y": 899.7,
+          "w": 13.6,
+          "h": 15.0,
+          "confidence": 0.9197
+        },
+        {
+          "x": 898.3,
+          "y": 398.2,
+          "w": 70.0,
+          "h": 91.1,
+          "confidence": 0.6244
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-07.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1702.4,
+          "y": 900.2,
+          "w": 13.4,
+          "h": 14.9,
+          "confidence": 0.8679
+        },
+        {
+          "x": 897.4,
+          "y": 399.3,
+          "w": 70.0,
+          "h": 89.6,
+          "confidence": 0.6004
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-08.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1699.3,
+          "y": 898.4,
+          "w": 11.4,
+          "h": 16.2,
+          "confidence": 0.9333
+        },
+        {
+          "x": 899.7,
+          "y": 397.8,
+          "w": 69.7,
+          "h": 88.7,
+          "confidence": 0.635
+        }
+      ],
+      "error": null
+    }
+  ]
+}

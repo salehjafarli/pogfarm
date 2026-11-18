@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/salehjafarli/pogfarm/internal/clipper/caption"
+	"github.com/salehjafarli/pogfarm/internal/clipper/detect"
 	"github.com/salehjafarli/pogfarm/internal/clipper/download"
 	"github.com/salehjafarli/pogfarm/internal/clipper/layout"
 	"github.com/salehjafarli/pogfarm/internal/clipper/transcribe"
@@ -23,6 +24,7 @@ import (
 // the transcriber keeps its own files there too.
 const (
 	DetectionFile  = "detection.json"
+	DebugImageFile = "detect.jpg"
 	CaptionFile    = "captions.ass"
 	TranscriptFile = "transcript.json"
 	ClipFile       = "clip.mp4"
@@ -131,15 +133,24 @@ type Result struct {
 	SourceWidth  int
 	SourceHeight int
 
-	// Detector names the webcam detector used, for example "off".
+	// Detector names the face detector used: "yunet", or "off".
 	Detector string
-	// Detection is what the detector answered. DetectionError holds the
-	// error it gave instead, in which case Detection is "no webcam".
+	// Detection is what the detector answered: a face and the arrangement
+	// it calls for, or none with a reason. When the detector failed,
+	// DetectionError holds its error and Detection is none with
+	// layout.ReasonError.
 	Detection      layout.Detection
 	DetectionError string
+	// DetectionReport holds the frames, faces and groups behind the
+	// detection. It is empty for the off detector and after an error.
+	DetectionReport detect.Report
 	// Layout is the layout applied: its arrangement, its crops and, when a
-	// detected webcam could not be used, the reason (Layout.Fallback).
+	// detected face could not be used, the reason (Layout.Fallback).
 	Layout layout.Result
+	// DebugImage is detect.jpg in the work directory: a sampled frame with
+	// the faces and the crops drawn on it. It is empty when there was no
+	// frame to draw on or drawing failed.
+	DebugImage string
 
 	// CaptionLines is the number of caption lines (phrases) burned in.
 	CaptionLines int
@@ -173,6 +184,7 @@ type Options struct {
 	// Downloader defaults to download.New(cfg.Download).
 	Downloader Downloader
 	// Detector defaults to NewDetector(cfg.WebcamDetection, Logger).
+	// New does not run the startup check; callers run detect.Check.
 	Detector Detector
 	// Transcriber defaults to transcribe.NewWhisperX(cfg.Transcribe,
 	// Logger).
@@ -193,8 +205,9 @@ type Renderer struct {
 }
 
 // New builds a Renderer from the clipper configuration. It checks the
-// render, layout and caption sections and fails on a problem; it starts
-// no tool.
+// render, layout, caption and detection sections and fails on a problem; it
+// starts no tool. In particular it does not check that the face detector
+// is installed: detect.Check does, and callers run it first.
 func New(cfg config.Clipper, opts Options) (*Renderer, error) {
 	if problems := cfg.Render.Validate(); len(problems) > 0 {
 		return nil, fmt.Errorf("render: %s", strings.Join(problems, "; "))
@@ -225,7 +238,9 @@ func New(cfg config.Clipper, opts Options) (*Renderer, error) {
 		r.downloader = download.New(cfg.Download)
 	}
 	if r.detector == nil {
-		r.detector = NewDetector(cfg.WebcamDetection, logger)
+		if r.detector, err = NewDetector(cfg.WebcamDetection, logger); err != nil {
+			return nil, fmt.Errorf("render: %w", err)
+		}
 	}
 	if r.transcriber == nil {
 		r.transcriber = transcribe.NewWhisperX(cfg.Transcribe, logger)
@@ -296,18 +311,18 @@ func (r *Renderer) Render(ctx context.Context, req Request, workDir string) (Res
 
 	if err := step(StepDetect, func() error {
 		res.Detector = r.detector.Name()
-		d, err := r.detector.Detect(ctx, src.Path, workDir)
+		rep, err := r.detector.Detect(ctx, src.Path, length, workDir)
 		if err != nil {
 			if ctx.Err() != nil {
 				return fmt.Errorf("render: detect: %w", err)
 			}
-			// Detection never fails a clip: no webcam, and say why.
-			log.Warn("render: webcam detection failed; using no webcam", "detector", res.Detector, "err", err)
+			// Detection never fails a clip: no face, and say why.
+			log.Warn("render: face detection failed; using blur fill", "detector", res.Detector, "err", err)
 			res.DetectionError = err.Error()
-			d = layout.NoWebcam()
+			rep = detect.Report{Detection: layout.NoFace(layout.ReasonError, err.Error()), Chosen: -1}
 		}
-		res.Detection = d
-		return writeJSON(filepath.Join(workDir, DetectionFile), detectionJSON(res.Detector, d, res.DetectionError))
+		res.Detection, res.DetectionReport = rep.Detection, rep
+		return nil
 	}); err != nil {
 		return res, err
 	}
@@ -322,8 +337,21 @@ func (r *Renderer) Render(ctx context.Context, req Request, workDir string) (Res
 		if err != nil {
 			return fmt.Errorf("render: %w: %w", err, download.ErrInvalidRequest)
 		}
-		log.Info("render: layout chosen", "arrangement", res.Layout.Arrangement,
-			"detector", res.Detector, "webcam", res.Detection.Webcam, "fallback", res.Layout.Fallback)
+		log.Info("render: layout chosen", "arrangement", res.Layout.Arrangement, "why", res.Why(),
+			"detector", res.Detector)
+		if err := writeJSON(filepath.Join(workDir, DetectionFile), detectionDoc(res)); err != nil {
+			return err
+		}
+		// The debug picture is a help, not part of the clip: a failure is
+		// only logged.
+		if path, err := r.drawDebugImage(ctx, res, workDir); err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("render: %w", err)
+			}
+			log.Warn("render: could not draw the detection picture", "err", err)
+		} else {
+			res.DebugImage = path
+		}
 		return nil
 	}); err != nil {
 		return res, err
@@ -457,25 +485,6 @@ func MarshalTranscript(t transcribe.Transcript) ([]byte, error) {
 // secondsOf is d in seconds, rounded to the millisecond.
 func secondsOf(d time.Duration) float64 {
 	return float64(d.Round(time.Millisecond).Milliseconds()) / 1000
-}
-
-func detectionJSON(detector string, d layout.Detection, detErr string) any {
-	type region struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		W float64 `json:"w"`
-		H float64 `json:"h"`
-	}
-	v := struct {
-		Detector string  `json:"detector"`
-		Webcam   bool    `json:"webcam"`
-		Region   *region `json:"region,omitempty"`
-		Error    string  `json:"error,omitempty"`
-	}{Detector: detector, Webcam: d.Webcam, Error: detErr}
-	if d.Webcam {
-		v.Region = &region{d.Region.X, d.Region.Y, d.Region.W, d.Region.H}
-	}
-	return v
 }
 
 func writeJSON(path string, v any) error {

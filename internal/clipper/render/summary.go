@@ -9,14 +9,15 @@ import (
 )
 
 // Summary is a short, human-readable account of a render, one fact per
-// line: the layout and the webcam decision, the caption lines, the clip's
-// length, picture and size, the time per step and the tool versions.
-// clipper render prints it, and clipper work logs it for every job.
+// line: the arrangement and why it was chosen, the face, the caption lines,
+// the clip's length, picture and size, the time per step and the tool
+// versions. clipper render prints it, and clipper work logs it for every
+// job.
 func (r Result) Summary() string {
 	var b strings.Builder
 	line := func(key, value string) { fmt.Fprintf(&b, "%-14s%s\n", key, value) }
-	line("arrangement", string(r.Layout.Arrangement))
-	line("webcam", r.webcamSummary())
+	line("arrangement", string(r.Layout.Arrangement)+": "+r.Why())
+	line("face", r.faceSummary())
 	line("caption lines", fmt.Sprint(r.CaptionLines))
 	line("clip", fmt.Sprintf("%s, %dx%d, %s", roundDuration(r.Duration), r.Width, r.Height, FormatBytes(r.Size)))
 	steps := make([]string, 0, len(r.Steps))
@@ -30,22 +31,50 @@ func (r Result) Summary() string {
 	return b.String()
 }
 
-// webcamSummary says where the webcam is, or why there is none.
-func (r Result) webcamSummary() string {
-	det := "detector " + r.Detector
+// Why says in words why the arrangement was chosen: the detector's detail
+// for a face, or the reason there is none.
+func (r Result) Why() string {
+	d := r.Detection
 	switch {
 	case r.DetectionError != "":
-		return fmt.Sprintf("none (%s failed: %s)", det, r.DetectionError)
-	case !r.Detection.Webcam:
-		return fmt.Sprintf("none (%s)", det)
+		return "detector failed: " + r.DetectionError
 	case r.Layout.Fallback != "":
-		return fmt.Sprintf("found at %s but not used: %s (%s)", formatRegion(r.Detection.Region), r.Layout.Fallback, det)
+		return "face not usable: " + r.Layout.Fallback
+	case d.Face && d.Detail != "":
+		return d.Detail
+	case d.Face:
+		return "face found"
 	}
-	return fmt.Sprintf("%s, crop %s (%s)", formatRegion(r.Detection.Region), formatCrop(r.Layout.WebcamCrop), det)
+	why := map[layout.Reason]string{
+		layout.ReasonNoFace:    "no steady face",
+		layout.ReasonAmbiguous: "ambiguous",
+		layout.ReasonOff:       "face detection off",
+		layout.ReasonError:     "detector failed",
+	}[d.Reason]
+	if why == "" {
+		why = "no face"
+	}
+	if d.Detail != "" {
+		why += ": " + d.Detail
+	}
+	return why
 }
 
-func formatRegion(g layout.Region) string {
-	return fmt.Sprintf("x=%.2f y=%.2f w=%.2f h=%.2f", g.X, g.Y, g.W, g.H)
+// faceSummary says where the face is and how it was framed, or that there
+// is none, and names the detector.
+func (r Result) faceSummary() string {
+	det := "detector " + r.Detector
+	if !r.Detection.Face {
+		return fmt.Sprintf("none (%s)", det)
+	}
+	if r.Layout.FaceFrame.IsZero() {
+		return fmt.Sprintf("%s, not framed (%s)", formatBox(r.Detection.Box), det)
+	}
+	return fmt.Sprintf("%s, framed by %s (%s)", formatBox(r.Detection.Box), formatCrop(r.Layout.FaceFrame), det)
+}
+
+func formatBox(g layout.Box) string {
+	return fmt.Sprintf("x=%.3f y=%.3f w=%.3f h=%.3f", g.X, g.Y, g.W, g.H)
 }
 
 func formatCrop(c layout.Crop) string {

@@ -1,0 +1,110 @@
+{
+  "detector": "yunet",
+  "model": "/models/yunet/face_detection_yunet_2023mar.onnx",
+  "images": [
+    {
+      "path": "/work/detect/frame-01.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 687.6,
+          "y": 258.5,
+          "w": 67.2,
+          "h": 84.0,
+          "confidence": 0.8661
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-02.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 845.1,
+          "y": 401.3,
+          "w": 130.8,
+          "h": 163.5,
+          "confidence": 0.8673
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-03.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-04.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 192.3,
+          "y": 487.9,
+          "w": 122.3,
+          "h": 152.9,
+          "confidence": 0.8659
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-05.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 327.7,
+          "y": 768.1,
+          "w": 129.9,
+          "h": 162.3,
+          "confidence": 0.7663
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-06.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-07.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 1272.0,
+          "y": 722.0,
+          "w": 107.7,
+          "h": 134.7,
+          "confidence": 0.7836
+        }
+      ],
+      "error": null
+    },
+    {
+      "path": "/work/detect/frame-08.jpg",
+      "width": 1920,
+      "height": 1080,
+      "faces": [
+        {
+          "x": 612.2,
+          "y": 311.4,
+          "w": 115.2,
+          "h": 143.9,
+          "confidence": 0.9111
+        }
+      ],
+      "error": null
+    }
+  ]
+}
