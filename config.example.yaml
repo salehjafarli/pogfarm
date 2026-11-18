@@ -406,3 +406,40 @@ clipper:
     # Write the captions in capital letters.
     # Env: CLIPPER_CAPTION_UPPERCASE. Default true.
     uppercase: true
+
+  # The final encode: one ffmpeg run that applies the layout, burns in the
+  # captions and writes the 1080x1920 H.264/AAC clip at a constant frame
+  # rate, with the audio loudness normalised.
+  render:
+    # ffmpeg and ffprobe: a path, or a name looked up in PATH.
+    # Env: CLIPPER_RENDER_FFMPEG_PATH, CLIPPER_RENDER_FFPROBE_PATH.
+    # Defaults "ffmpeg" and "ffprobe".
+    ffmpeg_path: "ffmpeg"
+    ffprobe_path: "ffprobe"
+    # libx264 preset (ultrafast ... veryslow) and constant rate factor
+    # (0 to 51, lower is better and bigger).
+    # Env: CLIPPER_RENDER_PRESET, CLIPPER_RENDER_CRF. Defaults "fast" and 21.
+    preset: "fast"
+    crf: 21
+    # Constant frame rate of the clip, 10 to 60.
+    # Env: CLIPPER_RENDER_FRAME_RATE. Default 30.
+    frame_rate: 30
+    # Largest clip file, in bytes. The video bitrate is capped from it and
+    # the clip's length. The default stays under Telegram's 50 MB limit for
+    # bots, where every clip is sent for review.
+    # Env: CLIPPER_RENDER_MAX_BYTES. Default 45000000.
+    max_bytes: 45000000
+    # The encode is killed after timeout_base plus timeout_per_second for
+    # every second of the clip.
+    # Env: CLIPPER_RENDER_TIMEOUT_BASE, CLIPPER_RENDER_TIMEOUT_PER_SECOND.
+    # Defaults 2m and 10s.
+    timeout_base: 2m
+    timeout_per_second: 10s
+
+  # Webcam detection: where the streamer's webcam is in each clip, so it can
+  # be stacked above the gameplay. No detector is built yet (#59): both
+  # values use the off detector, and every clip uses the blur fill layout.
+  # false will keep it off once the detector exists.
+  # Env: CLIPPER_WEBCAM_DETECTION_ENABLED. Default true.
+  webcam_detection:
+    enabled: true
