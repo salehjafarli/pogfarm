@@ -286,3 +286,12 @@ clipper:
   # pogfarm.api_secret.
   # Env: CLIPPER_API_SECRET or CLIPPER_API_SECRET_FILE.
   api_secret: "change-me"
+
+  # How the 16:9 source is arranged in the 1080x1920 clip. With a webcam
+  # found, the webcam is stacked above a centre slice of the gameplay;
+  # without one, the whole frame sits over a blurred copy of itself.
+  layout:
+    # Share of the clip's height taken by the webcam band of the stack,
+    # from 0.1 to 0.9; the gameplay gets the rest. File only, no env.
+    # Default one third.
+    webcam_share: 0.3333333333333333
