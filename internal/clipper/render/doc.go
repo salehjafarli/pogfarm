@@ -90,7 +90,8 @@
 // clipper render needs, in PATH or at the paths in the config file:
 //
 //   - ffmpeg and ffprobe, built with libass and libx264 (Debian's and
-//     Ubuntu's packages are);
+//     Ubuntu's packages are; Homebrew's plain ffmpeg has no libass, its
+//     ffmpeg-full does);
 //   - WhisperX with its model (clipper.transcribe.model) and, for word
 //     timing, the alignment model of the language;
 //   - TwitchDownloaderCLI 1.56.5, only for --vod;

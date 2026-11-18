@@ -4,7 +4,8 @@
 # It installs the same tools the clipper image has, at the same pinned
 # versions where macOS builds exist:
 #
-#   - ffmpeg and ffprobe, from Homebrew
+#   - ffmpeg and ffprobe, from Homebrew's ffmpeg-full (the plain ffmpeg
+#     formula has no libass, so it cannot burn in captions)
 #   - WhisperX, in its own Python virtual environment
 #   - the Whisper model, the alignment model and the sentence splitter, each
 #     downloaded once and checked against its SHA-256
@@ -12,7 +13,7 @@
 #   - TwitchDownloaderCLI, only with --with-twitch (needed for --vod, not
 #     for --input)
 #
-# Everything except Homebrew's ffmpeg and the font goes into one directory,
+# Everything except Homebrew's ffmpeg-full and the font goes into one directory,
 # ~/pogfarm-tools by default, so removing that directory undoes it.
 #
 # At the end it writes <tools-dir>/clipper.env with the settings that point
@@ -86,6 +87,9 @@ WHISPER_DIR="$MODELS/whisper/faster-whisper-small"
 TORCH_HOME_DIR="$MODELS/torch"
 NLTK_DIR="$MODELS/nltk"
 FONT_DEST="$HOME/Library/Fonts/Montserrat-ExtraBold.ttf"
+# ffmpeg-full is keg-only: it is not linked into Homebrew's bin, so it never
+# replaces a plain ffmpeg. The clipper is pointed at it by full path.
+FFMPEG_BIN="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/opt/ffmpeg-full/bin"
 TWITCH_DIR="$TOOLS_DIR/twitchdownloader"
 ENV_FILE="$TOOLS_DIR/clipper.env"
 
@@ -158,11 +162,21 @@ info "whisperx:        $WHISPERX_VERSION"
 # ---------------------------------------------------------------------------
 # 1. ffmpeg.
 
-step "ffmpeg and ffprobe (Homebrew)"
-if brew list --formula ffmpeg >/dev/null 2>&1; then
-  info "already installed: $(ffmpeg -hide_banner -version 2>/dev/null | head -n 1)"
+step "ffmpeg and ffprobe (Homebrew ffmpeg-full, with libass for captions)"
+if brew list --formula ffmpeg-full >/dev/null 2>&1; then
+  info "already installed: $("$FFMPEG_BIN/ffmpeg" -hide_banner -version 2>/dev/null | head -n 1)"
 else
-  run brew install ffmpeg
+  run brew install ffmpeg-full
+fi
+if [ "$DRY_RUN" -eq 0 ]; then
+  # The final encode needs the ass filter (libass), libx264 and loudnorm.
+  filters="$("$FFMPEG_BIN/ffmpeg" -hide_banner -filters 2>/dev/null)"
+  encoders="$("$FFMPEG_BIN/ffmpeg" -hide_banner -encoders 2>/dev/null)"
+  for need in " ass " " loudnorm "; do
+    printf '%s\n' "$filters" | grep -q "$need" || die "$FFMPEG_BIN/ffmpeg has no${need}filter"
+  done
+  printf '%s\n' "$encoders" | grep -q " libx264 " || die "$FFMPEG_BIN/ffmpeg has no libx264 encoder"
+  info "has the ass and loudnorm filters and the libx264 encoder"
 fi
 
 # ---------------------------------------------------------------------------
@@ -227,6 +241,13 @@ fi
 
 step "Settings: $ENV_FILE"
 env_content="# Written by scripts/setup-clipper-macos.sh. Load with: source $ENV_FILE
+export CLIPPER_DOWNLOAD_FFMPEG_PATH=\"$FFMPEG_BIN/ffmpeg\"
+export CLIPPER_DOWNLOAD_FFPROBE_PATH=\"$FFMPEG_BIN/ffprobe\"
+export CLIPPER_TRANSCRIBE_FFMPEG_PATH=\"$FFMPEG_BIN/ffmpeg\"
+export CLIPPER_RENDER_FFMPEG_PATH=\"$FFMPEG_BIN/ffmpeg\"
+export CLIPPER_RENDER_FFPROBE_PATH=\"$FFMPEG_BIN/ffprobe\"
+# WhisperX runs ffmpeg itself, by name.
+export PATH=\"$FFMPEG_BIN:\$PATH\"
 export CLIPPER_TRANSCRIBE_WHISPERX_PATH=\"$VENV/bin/whisperx\"
 export CLIPPER_TRANSCRIBE_MODEL=\"$WHISPER_DIR\"
 export TORCH_HOME=\"$TORCH_HOME_DIR\"
@@ -253,10 +274,10 @@ else
   test_dir="$(mktemp -d)"
   trap 'rm -rf "$test_dir"' EXIT
   say -o "$test_dir/speech.aiff" "This is a short test of the clipper transcription setup."
-  ffmpeg -hide_banner -nostdin -loglevel error -y -i "$test_dir/speech.aiff" \
+  "$FFMPEG_BIN/ffmpeg" -hide_banner -nostdin -loglevel error -y -i "$test_dir/speech.aiff" \
     -ac 1 -ar 16000 -c:a pcm_s16le "$test_dir/speech.wav"
   # The same arguments and offline settings as internal/clipper/transcribe.
-  HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TORCH_HOME="$TORCH_HOME_DIR" NLTK_DATA="$NLTK_DIR" \
+  PATH="$FFMPEG_BIN:$PATH" HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TORCH_HOME="$TORCH_HOME_DIR" NLTK_DATA="$NLTK_DIR" \
     "$VENV/bin/whisperx" "$test_dir/speech.wav" \
       --model "$WHISPER_DIR" --model_cache_only True --language en \
       --device cpu --compute_type int8 --output_format json --output_dir "$test_dir" \
